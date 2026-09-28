@@ -14,6 +14,7 @@ from google import genai
 from google.genai import types
 import pypdf
 from pptx import Presentation
+import urllib.request
 
 # Configuration de la page
 st.set_page_config(
@@ -36,6 +37,22 @@ if "fiches_generees" not in st.session_state:
 if "nom_lecon_global" not in st.session_state:
     st.session_state.nom_lecon_global = ""
 
+@st.cache_data(show_spinner=False)
+def charger_logo_ministere():
+    """Télécharge l'image officielle côté serveur pour contourner tout blocage de navigateur."""
+    urls = [
+        "https://raw.githubusercontent.com/abdelkrim/maroc-data/master/logos/men.png",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Logo_MEN_Maroc.svg/500px-Logo_MEN_Maroc.svg.png"
+    ]
+    for url in urls:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                return response.read()
+        except Exception:
+            continue
+    return None
+
 def verifier_acces():
     nom_saisi = st.session_state.get("nom_prof_input", "").strip()
     mdp_saisi = st.session_state.get("mdp_input", "").strip()
@@ -53,18 +70,23 @@ def verifier_acces():
     else:
         st.error("Mot de passe incorrect. Le mot de passe attendu est votre nom sans espace suivi de '2026@'.")
 
-# --- PAGE D'AUTHENTIFICATION AVEC LOGO OFFICIEL ---
+# --- PAGE D'AUTHENTIFICATION AVEC LOGO OFFICIEL ROBUSTE ---
 if not st.session_state.authentifie:
     col_c1, col_c2, col_c3 = st.columns([1, 1.2, 1])
     with col_c2:
-        # Affichage direct et centré de l'image officielle sur fond blanc net
+        logo_data = charger_logo_ministere()
+        if logo_data:
+            # Fond blanc net pour faire ressortir les armoiries et la calligraphie sur thème sombre
+            st.markdown(
+                '<div style="background-color: #FFFFFF; padding: 14px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); text-align: center;">',
+                unsafe_allow_html=True
+            )
+            st.image(logo_data, width=280)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
         st.markdown(
-            '<div style="text-align: center; margin-top: 15px; margin-bottom: 20px;">'
-            '<div style="background-color: #FFFFFF; padding: 16px 24px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid #E2E8F0;">'
-            '<img src="https://raw.githubusercontent.com/abdelkrim/maroc-data/master/logos/men.png" '
-            'style="width: 250px; max-width: 100%; height: auto; display: block; margin: 0 auto;" alt="Ministère de l\'Éducation Nationale" />'
-            '</div>'
-            '<h2 style="color: #4A90E2; margin-top: 15px; margin-bottom: 4px; font-weight: 700;">Portail Pédagogique de Physique-Chimie</h2>'
+            '<div style="text-align: center; margin-bottom: 25px;">'
+            '<h2 style="color: #4A90E2; margin-top: 5px; margin-bottom: 4px; font-weight: 700;">Portail Pédagogique de Physique-Chimie</h2>'
             '<p style="color: #A0AAB5; font-size: 14.5px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial (Maroc)</p>'
             '</div>',
             unsafe_allow_html=True
