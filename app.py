@@ -40,11 +40,10 @@ def verifier_acces():
     mdp_saisi = st.session_state.get("mdp_input", "").strip()
 
     if not nom_saisi:
-        st.error("Veuillez saisir votre nom complet d'enseignant.")
+        st.error("Veuillez saisir votre nom d'enseignant.")
         return
 
     # Mot de passe dynamique : nom sans espace en minuscules + 2026@
-    # Exemple : "chaimae benadou" -> "chaimaebenadou2026@"
     nom_sans_espace = "".join(nom_saisi.split()).lower()
     mdp_attendu = f"{nom_sans_espace}2026@"
 
@@ -52,7 +51,7 @@ def verifier_acces():
         st.session_state.authentifie = True
         st.session_state.prof_nom_connecte = nom_saisi
     else:
-        st.error(f"Mot de passe incorrect. Le format attendu est votre nom sans espace suivi de '2026@' (Ex: {nom_sans_espace}2026@).")
+        st.error("Mot de passe incorrect. Le mot de passe attendu est votre nom sans espace suivi de '2026@'.")
 
 if not st.session_state.authentifie:
     st.markdown("""
@@ -77,9 +76,10 @@ if not st.session_state.authentifie:
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         st.markdown("#### 🔒 Authentification de l'Enseignant")
-        st.text_input("Nom complet de l'enseignant :", key="nom_prof_input", placeholder="Ex: chaimae benadou")
-        st.text_input("Mot de passe :", type="password", key="mdp_input", placeholder="Ex: chaimaebenadou2026@")
-        st.caption("ℹ️ *Votre mot de passe est votre nom sans espace + 2026@*")
+        # Champs totalement vides sans aucun texte indicatif
+        st.text_input("Nom de l'enseignant :", key="nom_prof_input")
+        st.text_input("Mot de passe :", type="password", key="mdp_input")
+        st.caption("ℹ️ *Règle : votre mot de passe est votre nom sans espace + 2026@*")
         st.button("Accéder au Générateur ➔", type="primary", use_container_width=True, on_click=verifier_acces)
     st.stop()
 
@@ -267,14 +267,13 @@ st.caption(f"Enseignant(e) connecté(e) : **{st.session_state.prof_nom_connecte}
 
 with st.sidebar:
     st.header("📋 Paramètres de la séance")
-    # Le nom de l'enseignant est pré-rempli automatiquement avec sa connexion
     ens_nom = st.text_input("Professeur :", value=st.session_state.prof_nom_connecte)
     niveau_select = st.selectbox(
         "Niveau scolaire :",
         ["3ème AC (3ème Année Collège)", "2ème AC (2ème Année Collège)", "1ère AC (1ère Année Collège)"],
         index=0
     )
-    titre_manuel = st.text_input("Intitulé / Leçon (Optionnel) :", value="", placeholder="Laisser vide pour détection automatique")
+    titre_manuel = st.text_input("Intitulé / Leçon (Optionnel) :", value="")
     
     st.divider()
     if st.button("🚪 Se déconnecter", use_container_width=True):
@@ -295,7 +294,7 @@ with col_u:
 
 with col_t:
     st.markdown("#### 2. Ou coller des remarques didactiques / résumé")
-    texte_libre = st.text_area("Notes sur le contenu / activités :", height=135, placeholder="Ex: Insister sur la distinction cation/anion et l'activité documentaire sur les étiquettes d'eau minérale...")
+    texte_libre = st.text_area("Notes sur le contenu / activités :", height=135)
 
 contenu_source = ""
 if fichier_cours is not None:
