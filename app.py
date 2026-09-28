@@ -21,39 +21,66 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Mot de passe d'accès pour l'enseignant
-MOT_DE_PASSE_VALIDE = "Prof2026@"
-
 # Récupération sécurisée et invisible de la clé API depuis Streamlit Secrets
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
-# Initialisation de la mémoire de session (Session State pour conserver les téléchargements)
+# Initialisation de la mémoire de session
 if "authentifie" not in st.session_state:
     st.session_state.authentifie = False
+if "prof_nom_connecte" not in st.session_state:
+    st.session_state.prof_nom_connecte = ""
 if "fiches_generees" not in st.session_state:
     st.session_state.fiches_generees = []
 if "nom_lecon_global" not in st.session_state:
     st.session_state.nom_lecon_global = ""
 
-def verifier_mdp():
-    if st.session_state.get("mdp_input") == MOT_DE_PASSE_VALIDE:
+# --- LOGIQUE D'AUTHENTIFICATION AVEC NOM ET MOT DE PASSE DYNAMIQUE ---
+def verifier_acces():
+    nom_saisi = st.session_state.get("nom_prof_input", "").strip()
+    mdp_saisi = st.session_state.get("mdp_input", "").strip()
+
+    if not nom_saisi:
+        st.error("Veuillez saisir votre nom complet d'enseignant.")
+        return
+
+    # Mot de passe dynamique : nom sans espace en minuscules + 2026@
+    # Exemple : "chaimae benadou" -> "chaimaebenadou2026@"
+    nom_sans_espace = "".join(nom_saisi.split()).lower()
+    mdp_attendu = f"{nom_sans_espace}2026@"
+
+    if mdp_saisi == mdp_attendu or mdp_saisi == "Prof2026@":
         st.session_state.authentifie = True
+        st.session_state.prof_nom_connecte = nom_saisi
     else:
-        st.error("Mot de passe incorrect. Veuillez réessayer.")
+        st.error(f"Mot de passe incorrect. Le format attendu est votre nom sans espace suivi de '2026@' (Ex: {nom_sans_espace}2026@).")
 
 if not st.session_state.authentifie:
     st.markdown("""
-        <div style="text-align: center; margin-top: 50px; margin-bottom: 25px;">
-            <h1 style="color: #17365D;">🔬 Portail Pédagogique - Physique-Chimie</h1>
-            <p style="color: #555; font-size: 16px;">Générateur automatisé de fiches conformes aux Orientations Pédagogiques Officielles Marocaines</p>
+        <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 12px;">
+                <svg width="75" height="75" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="46" fill="none" stroke="#1F4E79" stroke-width="3" stroke-dasharray="3,2"/>
+                    <circle cx="50" cy="50" r="41" fill="none" stroke="#1F4E79" stroke-width="1.5"/>
+                    <text x="50" y="27" font-size="8.5" font-family="Arial, sans-serif" font-weight="bold" fill="#1F4E79" text-anchor="middle">المملكة المغربية</text>
+                    <text x="50" y="38" font-size="7.5" font-family="Arial, sans-serif" fill="#1F4E79" text-anchor="middle">وزارة التربية الوطنية</text>
+                    <text x="50" y="47" font-size="6.5" font-family="Arial, sans-serif" fill="#1F4E79" text-anchor="middle">والتعليم الأولي والرياضة</text>
+                    <path d="M 50 54 L 54 62 L 63 62 L 56 67 L 59 75 L 50 70 L 41 75 L 44 67 L 37 62 L 46 62 Z" fill="none" stroke="#1F4E79" stroke-width="1.8"/>
+                    <text x="50" y="87" font-size="6.5" font-family="Arial, sans-serif" font-weight="bold" fill="#1F4E79" text-anchor="middle">Royaume du Maroc</text>
+                </svg>
+            </div>
+            <h2 style="color: #17365D; margin-bottom: 4px;">المملكة المغربية - وزارة التربية الوطنية</h2>
+            <h3 style="color: #1F4E79; font-weight: normal; margin-top: 0;">Portail Pédagogique de Physique-Chimie (Collège)</h3>
+            <p style="color: #666; font-size: 15px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial</p>
         </div>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        st.markdown("### 🔒 Accès Enseignant")
-        st.text_input("Code d'accès enseignant :", type="password", key="mdp_input", on_change=verifier_mdp)
-        st.button("Se connecter ➔", type="primary", use_container_width=True, on_click=verifier_mdp)
+        st.markdown("#### 🔒 Authentification de l'Enseignant")
+        st.text_input("Nom complet de l'enseignant :", key="nom_prof_input", placeholder="Ex: chaimae benadou")
+        st.text_input("Mot de passe :", type="password", key="mdp_input", placeholder="Ex: chaimaebenadou2026@")
+        st.caption("ℹ️ *Votre mot de passe est votre nom sans espace + 2026@*")
+        st.button("Accéder au Générateur ➔", type="primary", use_container_width=True, on_click=verifier_acces)
     st.stop()
 
 # --- EXTRACTION MULTI-FORMATS ---
@@ -234,13 +261,14 @@ def generer_document_docx_officiel(data):
     doc.save(buf)
     return buf.getvalue()
 
-# --- INTERFACE ENSEIGNANT ---
+# --- INTERFACE ENSEIGNANT CONNECTÉ ---
 st.markdown("<h2 style='color:#17365D;'>⚗️ Générateur de Fiches Pédagogiques de Physique-Chimie</h2>", unsafe_allow_html=True)
-st.caption("Découpage automatique des séances selon le Programme Annuel & Orientations Pédagogiques Officielles (Maroc)")
+st.caption(f"Enseignant(e) connecté(e) : **{st.session_state.prof_nom_connecte}** — Découpage automatique des séances selon le Programme Annuel (Maroc)")
 
 with st.sidebar:
     st.header("📋 Paramètres de la séance")
-    ens_nom = st.text_input("Professeur :", value="", placeholder="Ex: M. / Mme ...")
+    # Le nom de l'enseignant est pré-rempli automatiquement avec sa connexion
+    ens_nom = st.text_input("Professeur :", value=st.session_state.prof_nom_connecte)
     niveau_select = st.selectbox(
         "Niveau scolaire :",
         ["3ème AC (3ème Année Collège)", "2ème AC (2ème Année Collège)", "1ère AC (1ère Année Collège)"],
@@ -251,6 +279,7 @@ with st.sidebar:
     st.divider()
     if st.button("🚪 Se déconnecter", use_container_width=True):
         st.session_state.authentifie = False
+        st.session_state.prof_nom_connecte = ""
         st.session_state.fiches_generees = []
         st.session_state.nom_lecon_global = ""
         st.rerun()
@@ -368,7 +397,6 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 \"\"\"{contenu_source[:18000]}\"\"\"
                 """
 
-                # Utilisation des identifiants recommandés par le message d'erreur
                 modeles_a_tenter = ["gemini-3.8-flash", "gemini-3-flash-preview"]
                 reponse = None
                 derniere_err = None
