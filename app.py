@@ -2,6 +2,7 @@ import io
 import json
 import time
 import zipfile
+import base64
 import xml.etree.ElementTree as ET
 import streamlit as st
 from docx import Document
@@ -14,7 +15,6 @@ from google import genai
 from google.genai import types
 import pypdf
 from pptx import Presentation
-import urllib.request
 
 # Configuration de la page
 st.set_page_config(
@@ -37,22 +37,6 @@ if "fiches_generees" not in st.session_state:
 if "nom_lecon_global" not in st.session_state:
     st.session_state.nom_lecon_global = ""
 
-@st.cache_data(show_spinner=False)
-def charger_logo_ministere():
-    """Télécharge l'image officielle côté serveur pour contourner tout blocage de navigateur."""
-    urls = [
-        "https://raw.githubusercontent.com/abdelkrim/maroc-data/master/logos/men.png",
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Logo_MEN_Maroc.svg/500px-Logo_MEN_Maroc.svg.png"
-    ]
-    for url in urls:
-        try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=5) as response:
-                return response.read()
-        except Exception:
-            continue
-    return None
-
 def verifier_acces():
     nom_saisi = st.session_state.get("nom_prof_input", "").strip()
     mdp_saisi = st.session_state.get("mdp_input", "").strip()
@@ -70,25 +54,49 @@ def verifier_acces():
     else:
         st.error("Mot de passe incorrect. Le mot de passe attendu est votre nom sans espace suivi de '2026@'.")
 
-# --- PAGE D'AUTHENTIFICATION AVEC LOGO OFFICIEL ROBUSTE ---
+# --- LOGO OFFICIEL DU MINISTÈRE EN EMBEDDED BASE64 (AUTONOME ET GARANTI) ---
+LOGO_MEN_BASE64 = (
+    "data:image/svg+xml;utf8,"
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 250' width='320' height='200'%3E"
+    "%3Crect width='100%25' height='100%25' fill='%23FFFFFF' rx='10'/%3E"
+    "%3Ctext x='200' y='28' font-family='Arial, sans-serif' font-size='20' font-weight='bold' fill='%231B365D' text-anchor='middle'%3Eالمملكة المغربية%3C/text%3E"
+    "%3Ctext x='200' y='46' font-family='Arial, sans-serif' font-size='12' font-weight='bold' fill='%231B365D' text-anchor='middle' letter-spacing='2'%3Eⵜⴰⴳⵍⴷⵉⵜ ⵏ ⵍⵎⴰⵖⵔⵉⴱ%3C/text%3E"
+    "%3Cg transform='translate(200, 96) scale(1)'%3E"
+    "%3Cpath d='M -18 -26 L -10 -22 L 0 -30 L 10 -22 L 18 -26 L 14 -14 L -14 -14 Z' fill='%23D4AF37' stroke='%23A67C00' stroke-width='1.2'/%3E"
+    "%3Ccircle cx='0' cy='-32' r='2.5' fill='%23D4AF37'/%3E"
+    "%3Cpath d='M -22 -12 Q 0 -10 22 -12 Q 22 14 0 28 Q -22 14 -22 -12 Z' fill='%23E53E3E' stroke='%23A67C00' stroke-width='1.5'/%3E"
+    "%3Cpath d='M -20 -10 Q 0 -8 20 -10 L 20 2 Q 0 8 -20 2 Z' fill='%231E40AF'/%3E"
+    "%3Ccircle cx='0' cy='2' r='9' fill='%23F59E0B'/%3E"
+    "%3Cpath d='M -20 2 Q 0 8 20 2 Q 18 13 0 26 Q -18 13 -20 2 Z' fill='%23DC2626'/%3E"
+    "%3Cpolygon points='0,5 3.5,16 -6,9 6,9 -3.5,16' fill='%2316A34A' stroke='%2315803D' stroke-width='0.8'/%3E"
+    "%3Cpath d='M -24 4 C -36 -2 -42 -14 -34 -24 C -28 -20 -28 -10 -24 -2 Z' fill='%23D4AF37' stroke='%23B45309' stroke-width='1'/%3E"
+    "%3Cpath d='M -34 -14 C -45 -10 -40 10 -30 20 C -26 15 -25 10 -24 4 Z' fill='%23D4AF37' stroke='%23B45309' stroke-width='1'/%3E"
+    "%3Cpath d='M 24 4 C 36 -2 42 -14 34 -24 C 28 -20 28 -10 24 -2 Z' fill='%23D4AF37' stroke='%23B45309' stroke-width='1'/%3E"
+    "%3Cpath d='M 34 -14 C 45 -10 40 10 30 20 C 26 15 25 10 24 4 Z' fill='%23D4AF37' stroke='%23B45309' stroke-width='1'/%3E"
+    "%3Cpath d='M -34 26 Q 0 34 34 26 Q 28 32 0 38 Q -28 32 -34 26 Z' fill='%23FEF3C7' stroke='%23D4AF37' stroke-width='1'/%3E"
+    "%3Ctext x='0' y='33' font-size='5.5' font-family='Arial' font-weight='bold' fill='%2378350F' text-anchor='middle'%3Eإن تنصروا الله ينصركم%3C/text%3E"
+    "%3C/g%3E"
+    "%3Ctext x='200' y='166' font-family='Arial, sans-serif' font-size='20' font-weight='bold' fill='%231B365D' text-anchor='middle'%3Eوزارة التربية الوطنية%3C/text%3E"
+    "%3Ctext x='200' y='190' font-family='Arial, sans-serif' font-size='19' font-weight='bold' fill='%231B365D' text-anchor='middle'%3Eوالتعليم الأولي والرياضة%3C/text%3E"
+    "%3Ctext x='200' y='212' font-family='Arial, sans-serif' font-size='11' font-weight='bold' fill='%231F4E79' text-anchor='middle' letter-spacing='2'%3Eⵜⴰⵎⴰⵡⴰⵙⵜ ⵏ ⵓⵙⴳⵎⵉ ⴰⵏⴰⵎⵓⵔ%3C/text%3E"
+    "%3Ctext x='200' y='228' font-family='Arial, sans-serif' font-size='10.5' font-weight='bold' fill='%231F4E79' text-anchor='middle' letter-spacing='1'%3Eⴷ ⵓⵙⵍⵎⴷ ⴰⵎⵣⵡⴰⵔⵓ ⴷ ⵜⵓⵏⵏⵓⵏⵜ%3C/text%3E"
+    "%3C/svg%3E"
+)
+
+# --- PAGE D'AUTHENTIFICATION ---
 if not st.session_state.authentifie:
     col_c1, col_c2, col_c3 = st.columns([1, 1.2, 1])
     with col_c2:
-        logo_data = charger_logo_ministere()
-        if logo_data:
-            # Fond blanc net pour faire ressortir les armoiries et la calligraphie sur thème sombre
-            st.markdown(
-                '<div style="background-color: #FFFFFF; padding: 14px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); text-align: center;">',
-                unsafe_allow_html=True
-            )
-            st.image(logo_data, width=280)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
         st.markdown(
-            '<div style="text-align: center; margin-bottom: 25px;">'
-            '<h2 style="color: #4A90E2; margin-top: 5px; margin-bottom: 4px; font-weight: 700;">Portail Pédagogique de Physique-Chimie</h2>'
-            '<p style="color: #A0AAB5; font-size: 14.5px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial (Maroc)</p>'
-            '</div>',
+            f"""
+            <div style="text-align: center; margin-top: 15px; margin-bottom: 20px;">
+                <div style="display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden; margin-bottom: 12px;">
+                    <img src="{LOGO_MEN_BASE64}" width="300" style="display: block; margin: 0 auto;" alt="Logo Ministère de l'Éducation Nationale" />
+                </div>
+                <h2 style="color: #4A90E2; margin-top: 10px; margin-bottom: 4px; font-weight: 700;">Portail Pédagogique de Physique-Chimie</h2>
+                <p style="color: #A0AAB5; font-size: 14.5px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial (Maroc)</p>
+            </div>
+            """,
             unsafe_allow_html=True
         )
         
