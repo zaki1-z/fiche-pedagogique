@@ -22,10 +22,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Récupération sécurisée et invisible de la clé API depuis Streamlit Secrets
+# Clé API invisible via Secrets
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
-# Initialisation de la mémoire de session
+# Initialisation Session State
 if "authentifie" not in st.session_state:
     st.session_state.authentifie = False
 if "prof_nom_connecte" not in st.session_state:
@@ -35,7 +35,6 @@ if "fiches_generees" not in st.session_state:
 if "nom_lecon_global" not in st.session_state:
     st.session_state.nom_lecon_global = ""
 
-# --- LOGIQUE D'AUTHENTIFICATION AVEC NOM ET MOT DE PASSE DYNAMIQUE ---
 def verifier_acces():
     nom_saisi = st.session_state.get("nom_prof_input", "").strip()
     mdp_saisi = st.session_state.get("mdp_input", "").strip()
@@ -82,34 +81,35 @@ if not st.session_state.authentifie:
         st.button("Accéder au Générateur ➔", type="primary", use_container_width=True, on_click=verifier_acces)
     st.stop()
 
-# --- EXTRACTION MULTI-FORMATS ---
+# --- EXTRACTION LÉGÈRE ET PROPRE POUR ÉVITER LE SATURATION ---
 def extraire_texte(uploaded_file):
     nom = uploaded_file.name.lower()
     texte = ""
     if nom.endswith(".pdf"):
         reader = pypdf.PdfReader(uploaded_file)
-        texte = "\n".join([page.extract_text() or "" for page in reader.pages])
+        texte = "\n".join([page.extract_text() or "" for page in reader.pages[:20]])
     elif nom.endswith(".docx"):
         doc = Document(uploaded_file)
         texte = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
     elif nom.endswith(".pptx"):
         prs = Presentation(uploaded_file)
         diapos = []
-        for i, slide in enumerate(prs.slides):
+        for i, slide in enumerate(prs.slides[:25]):  # Limite aux 25 premières diapositives pour la structure
             textes_slide = []
             for shape in slide.shapes:
                 if shape.has_text_frame:
                     for paragraph in shape.text_frame.paragraphs:
-                        if paragraph.text.strip():
-                            textes_slide.append(paragraph.text.strip())
+                        t = paragraph.text.strip()
+                        if t and len(t) > 2 and t not in textes_slide:
+                            textes_slide.append(t)
             if textes_slide:
-                diapos.append(f"[Diapositive {i+1}]\n" + "\n".join(textes_slide))
-        texte = "\n\n".join(diapos)
+                diapos.append(f"[Diapo {i+1}] " + " | ".join(textes_slide))
+        texte = "\n".join(diapos)
     elif nom.endswith(".txt"):
         texte = uploaded_file.read().decode("utf-8", errors="ignore")
     return texte
 
-# --- OUTILS DE FORMATAGE WORD CONFORMES AUX EXEMPLES ---
+# --- FORMATAGE WORD AUX STANDARDS OFFICIELS ---
 def appliquer_arriere_plan(cell, color_hex):
     tcPr = cell._tc.get_or_add_tcPr()
     tcPr.append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>'))
@@ -147,7 +147,6 @@ def ecrire_cellule(cell, text, gras=False, couleur=(0, 0, 0), taille=9, align=WD
     if fond:
         appliquer_arriere_plan(cell, fond)
 
-# --- GÉNÉRATION DU DOCUMENT DOCX ---
 def generer_document_docx_officiel(data):
     doc = Document()
     
@@ -157,13 +156,12 @@ def generer_document_docx_officiel(data):
         section.left_margin = Inches(0.47)
         section.right_margin = Inches(0.47)
 
-    # 1. En-tête (Séance/Niveau | Titre Fiche | Professeur)
+    # 1. En-tête
     t_header = doc.add_table(rows=2, cols=3)
     t_header.alignment = WD_TABLE_ALIGNMENT.CENTER
     t_header.style = 'Table Grid'
     
     col_w_header = [Inches(2.2), Inches(3.1), Inches(2.2)]
-    
     prof_nom = data.get('enseignant', '').strip() or "........................"
     titre_lecon = data.get('titre_lecon', '').strip() or "Leçon : Physique-Chimie"
     
@@ -181,7 +179,7 @@ def generer_document_docx_officiel(data):
 
     doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
-    # 2. Tableau Cadrage Pédagogique
+    # 2. Cadrage Pédagogique
     t_cadre = doc.add_table(rows=2, cols=2)
     t_cadre.alignment = WD_TABLE_ALIGNMENT.CENTER
     t_cadre.style = 'Table Grid'
@@ -204,7 +202,7 @@ def generer_document_docx_officiel(data):
 
     doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
-    # 3. Tableau Principal des Activités (6 colonnes)
+    # 3. Tableau Activités (6 colonnes)
     activites = data.get("activites", [])
     t_act = doc.add_table(rows=1 + len(activites), cols=6)
     t_act.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -238,7 +236,7 @@ def generer_document_docx_officiel(data):
 
     doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
-    # 4. Tableau d'Évaluation & Remédiation
+    # 4. Évaluation & Remédiation
     t_eval = doc.add_table(rows=2, cols=3)
     t_eval.alignment = WD_TABLE_ALIGNMENT.CENTER
     t_eval.style = 'Table Grid'
@@ -250,7 +248,7 @@ def generer_document_docx_officiel(data):
 
     ecrire_cellule(t_eval.rows[1].cells[0], data.get("connaissances_evaluables", ""))
     ecrire_cellule(t_eval.rows[1].cells[1], data.get("capacites_evaluables", ""))
-    ecrire_cellule(t_eval.rows[1].cells[2], data.get("obstacles_remediation", "Difficulté d'abstraction / Remédiation par modélisation ou simulation."))
+    ecrire_cellule(t_eval.rows[1].cells[2], data.get("obstacles_remediation", "Difficulté d'abstraction / Remédiation par modélisation."))
 
     for row in t_eval.rows:
         for idx, w in enumerate(w_eval):
@@ -260,7 +258,7 @@ def generer_document_docx_officiel(data):
     doc.save(buf)
     return buf.getvalue()
 
-# --- INTERFACE ENSEIGNANT CONNECTÉ ---
+# --- INTERFACE ENSEIGNANT ---
 st.markdown("<h2 style='color:#17365D;'>⚗️ Générateur de Fiches Pédagogiques de Physique-Chimie</h2>", unsafe_allow_html=True)
 st.caption(f"Enseignant(e) connecté(e) : **{st.session_state.prof_nom_connecte}** — Découpage automatique des séances selon le Programme Annuel (Maroc)")
 
@@ -313,28 +311,28 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
     elif not contenu_source.strip():
         st.warning("Veuillez fournir un support de cours (fichier ou texte) avant de lancer la génération.")
     else:
-        with st.spinner("Analyse didactique et génération des fiches par séance..."):
+        with st.spinner("Conception didactique et génération des fiches en cours..."):
             try:
                 client = genai.Client(api_key=api_key)
                 
                 prompt = f"""
-                Tu es un inspecteur pédagogique national de Physique-Chimie au Maroc (Enseignement Secondaire Collégial).
-                Ta mission est d'analyser le document de cours ci-dessous, d'identifier la leçon exacte dans le programme annuel officiel marocain, de DÉTERMINER AUTOMATIQUEMENT LE NOMBRE DE SÉANCES NÉCESSAIRES, et de produire une fiche pédagogique distincte pour CHAQUE séance.
+                Tu es un inspecteur pédagogique de Physique-Chimie au Maroc (Enseignement Secondaire Collégial).
+                À partir du contenu fourni ci-dessous, identifie la leçon correspondante dans le programme annuel officiel marocain et DÉCOUPES-LA AUTOMATIQUEMENT EN SÉANCES conformes aux directives ministérielles.
 
-                NIVEAU SÉLECTIONNÉ : {niveau_select}
-                TITRE INDIQUE PAR LE PROFESSEUR : {titre_manuel.strip() if titre_manuel.strip() else "À déterminer automatiquement à partir du contenu"}
+                NIVEAU CHOISI : {niveau_select}
+                TITRE INDIQUÉ : {titre_manuel.strip() if titre_manuel.strip() else "Détecter selon le contenu"}
 
-                RÉFÉRENTIEL DU PROGRAMME OFFICIEL MAROCAIN :
-                - 1AC : Matière (L'eau, Trois états, Changements d'état, Mélanges, Traitement), Électricité (Circuit simple, Montages série/dérivation, Courant continu, Résistance, Lois).
-                - 2AC : Matière (L'air, Molécules/Atomes, Réactions chimiques/combustions), Lumière (Sources, Dispersion, Propagation, Lentilles minces, Œil), Électricité (Courant alternatif, Installation domestique).
-                - 3AC : Matériaux (Matériaux usuels, Atomes et Ions = 2 SÉANCES : Séance 1/2 structure de l'atome, Z, neutralité ; Séance 2/2 ions, formules et charges), Réactions chimiques (Air, Solutions acides/basiques & pH), Mécanique (Mouvement, Actions mécaniques, Forces, Équilibre, Poids/Masse), Électricité (Loi d'Ohm, Puissance, Énergie).
+                RÉFÉRENTIEL DU PROGRAMME :
+                - 1AC : Matière (Eau, 3 états, Changements d'état, Mélanges, Traitement), Électricité (Circuit simple, Montages, Courant continu, Résistance, Lois).
+                - 2AC : Matière (Air, Atomes/Molécules, Réactions chimiques), Lumière (Sources, Dispersion, Propagation, Lentilles, Œil), Électricité (Courant alternatif, Installation).
+                - 3AC : Matériaux (Matériaux usuels, Atomes et Ions = 2 SÉANCES : Séance 1/2 structure de l'atome, Z, électroneutralité ; Séance 2/2 ions, formules et charges), Réactions avec l'air, Solutions acides/basiques & pH, Mécanique, Électricité.
 
-                STRUCTURE DES 3 PHASES OBLIGATOIRES (60 min par séance) :
-                1. "Activité Introductive" (10 min) : Rappel des prérequis, question de la séance (situation-problème), formulation des hypothèses.
-                2. "Activité Constructive" (30 min) : Investigation documentaire ou expérimentale concrète, analyse, raisonnement, calculs.
-                3. "BILAN" (20 min) : Synthèse institutionnelle, résumé de la séance, exercice d'application.
+                STRUCTURE OBLIGATOIRE DE CHAQUE SÉANCE (60 min) :
+                1. "Activité Introductive" (10 min)
+                2. "Activité Constructive" (30 min)
+                3. "BILAN" (20 min)
 
-                Format STRICTEMENT attendu (JSON valide uniquement) :
+                Réponds STRICTEMENT par un JSON valide :
                 {{
                   "lecon_detectee": "Nom officiel de la leçon",
                   "nombre_seances": 2,
@@ -342,89 +340,76 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                     {{
                       "seance_label": "Séance 1/2",
                       "titre_lecon": "Leçon : ...",
-                      "question_seance": "Question de départ posée aux élèves",
-                      "objectifs": [
-                        "Connaître...",
-                        "Savoir calculer..."
-                      ],
-                      "prerequis": [
-                        "Prérequis 1",
-                        "Prérequis 2"
-                      ],
-                      "concepts": [
-                        "Concept clé 1",
-                        "Concept clé 2"
-                      ],
+                      "question_seance": "Question posée",
+                      "objectifs": ["Connaître...", "Savoir calculer..."],
+                      "prerequis": ["Prérequis 1", "Prérequis 2"],
+                      "concepts": ["Concept 1", "Concept 2"],
                       "activites": [
                         {{
                           "type_etape": "Activité Introductive",
                           "duree": "10 min",
                           "bilan_contenu": "• Poser la question de la séance\\n• Émettre des hypothèses",
                           "supports": "- Tableau\\n- Documents",
-                          "activite_eleve": "- Répondre aux questions de réactivation\\n- Formuler des hypothèses",
-                          "activite_prof": "- Poser la situation-problème\\n- Noter les hypothèses au tableau",
-                          "questions_interactives": "Discussion ouverte avec la classe."
+                          "activite_eleve": "- Répondre et émettre des hypothèses",
+                          "activite_prof": "- Poser la situation-problème",
+                          "questions_interactives": "Discussion de départ."
                         }},
                         {{
                           "type_etape": "Activité Constructive",
                           "duree": "30 min",
-                          "bilan_contenu": "Résumé des notions construites lors de la séance...",
-                          "supports": "- Matériel d'expérimentation / Fiches / Étiquettes",
-                          "activite_eleve": "- Observer, manipuler, calculer\\n- Dégager la conclusion",
-                          "activite_prof": "- Guider l'investigation sans donner directement le résultat",
-                          "questions_interactives": "Questions clés de guidage didactique."
+                          "bilan_contenu": "Résumé notionnel...",
+                          "supports": "- Matériel / Étiquettes / Fiches",
+                          "activite_eleve": "- Observer et déduire",
+                          "activite_prof": "- Guider l'investigation",
+                          "questions_interactives": "Questions clés."
                         }},
                         {{
                           "type_etape": "BILAN",
                           "duree": "20 min",
-                          "bilan_contenu": "Résumé institutionnel de la séance et exercice d'application résolu.",
-                          "supports": "- Tableau\\n- Cahier de cours",
-                          "activite_eleve": "- Noter la synthèse et résoudre l'exercice d'application",
-                          "activite_prof": "- Structurer la réponse finale et corriger l'exercice",
-                          "questions_interactives": "Évaluation formative des acquis."
+                          "bilan_contenu": "Résumé institutionnel et exercice d'application.",
+                          "supports": "- Cahier de cours",
+                          "activite_eleve": "- Noter la synthèse",
+                          "activite_prof": "- Structurer la réponse",
+                          "questions_interactives": "Évaluation formative."
                         }}
                       ],
-                      "connaissances_evaluables": "Connaissances...",
-                      "capacites_evaluables": "Capacités...",
-                      "obstacles_remediation": "Obstacle et remédiation..."
+                      "connaissances_evaluables": "...",
+                      "capacites_evaluables": "...",
+                      "obstacles_remediation": "..."
                     }}
                   ]
                 }}
 
-                Support de cours à traiter :
-                \"\"\"{contenu_source[:9000]}\"\"\"
+                Support de cours à analyser :
+                \"\"\"{contenu_source[:5000]}\"\"\"
                 """
 
-                # Liste des modèles disponibles en priorité standard pour éviter le 503
-                modeles_a_tenter = [
-                    "gemini-2.0-flash",
-                    "gemini-2.5-flash",
-                    "gemini-1.5-flash",
-                    "gemini-3-flash-preview"
-                ]
-
+                # Modèles stables avec temporisation de sécurité (anti-503)
+                modeles_candidats = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-3.8-flash"]
                 reponse = None
                 derniere_err = None
 
-                for m in modeles_a_tenter:
-                    try:
-                        reponse = client.models.generate_content(
-                            model=m,
-                            contents=prompt,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                temperature=0.2
+                for mod in modeles_candidats:
+                    for essai in range(3):
+                        try:
+                            reponse = client.models.generate_content(
+                                model=mod,
+                                contents=prompt,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    temperature=0.2
+                                )
                             )
-                        )
-                        if reponse and reponse.text:
-                            break
-                    except Exception as err:
-                        derniere_err = err
-                        time.sleep(1.0)
-                        continue
+                            if reponse and reponse.text:
+                                break
+                        except Exception as e:
+                            derniere_err = e
+                            time.sleep(2.5 * (essai + 1))  # Pause anti-saturation
+                    if reponse and reponse.text:
+                        break
 
                 if reponse is None or not reponse.text:
-                    raise Exception(f"Indisponibilité temporaire des serveurs Gemini ({derniere_err}). Veuillez relancer.")
+                    raise Exception(f"Serveur indisponible pour le moment ({derniere_err}).")
 
                 resultat_json = json.loads(reponse.text)
                 liste_seances = resultat_json.get("seances", [])
@@ -472,7 +457,6 @@ if st.session_state.fiches_generees:
                 use_container_width=True
             )
 
-    # Si plusieurs séances, pack ZIP complet
     if len(st.session_state.fiches_generees) > 1:
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w") as zip_file:
