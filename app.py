@@ -14,16 +14,19 @@ from pptx import Presentation
 
 # Configuration de la page
 st.set_page_config(
-    page_title="Générateur de Fiches Pédagogiques",
-    page_icon="📚",
+    page_title="Portail Pédagogique - Physique-Chimie Collège",
+    page_icon="⚗️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Mot de passe de protection (modifiable)
+# Mot de passe d'accès pour l'enseignant
 MOT_DE_PASSE_VALIDE = "Prof2026@"
 
-# --- GESTION DE L'AUTHENTIFICATION ---
+# Récupération sécurisée et invisible de la clé API depuis Streamlit Secrets
+api_key = st.secrets.get("GEMINI_API_KEY", "")
+
+# Authentification
 if "authentifie" not in st.session_state:
     st.session_state.authentifie = False
 
@@ -35,33 +38,29 @@ def verifier_mdp():
 
 if not st.session_state.authentifie:
     st.markdown("""
-        <div style="text-align: center; margin-top: 50px; margin-bottom: 20px;">
-            <h1 style="color: #1F4E79;">🎓 Portail Pédagogique</h1>
-            <p style="color: #555; font-size: 16px;">Générateur automatisé de fiches de séances — Modèle Enseignement Explicite</p>
+        <div style="text-align: center; margin-top: 50px; margin-bottom: 25px;">
+            <h1 style="color: #17365D;">🔬 Portail Pédagogique - Physique-Chimie</h1>
+            <p style="color: #555; font-size: 16px;">Générateur automatisé de fiches conformes aux Orientations Pédagogiques Officielles Marocaines</p>
         </div>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        st.markdown("### 🔒 Accès Réservé")
-        st.text_input("Saisissez votre code d'accès :", type="password", key="mdp_input", on_change=verifier_mdp)
+        st.markdown("### 🔒 Accès Enseignant")
+        st.text_input("Code d'accès enseignant :", type="password", key="mdp_input", on_change=verifier_mdp)
         st.button("Se connecter ➔", type="primary", use_container_width=True, on_click=verifier_mdp)
-        st.caption("Contactez l'administrateur si vous n'avez pas le code.")
     st.stop()
 
-# --- EXTRACTION DE TEXTE MULTI-FORMATS ---
+# --- EXTRACTION MULTI-FORMATS ---
 def extraire_texte(uploaded_file):
     nom = uploaded_file.name.lower()
     texte = ""
-    
     if nom.endswith(".pdf"):
         reader = pypdf.PdfReader(uploaded_file)
         texte = "\n".join([page.extract_text() or "" for page in reader.pages])
-        
     elif nom.endswith(".docx"):
         doc = Document(uploaded_file)
         texte = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
-        
     elif nom.endswith(".pptx"):
         prs = Presentation(uploaded_file)
         diapos = []
@@ -73,20 +72,18 @@ def extraire_texte(uploaded_file):
                         if paragraph.text.strip():
                             textes_slide.append(paragraph.text.strip())
             if textes_slide:
-                diapos.append(f"[Diapositive {i+1}]\n" + "\n".join(textes_slide))
+                diapos.append(f"[Diapo {i+1}]\n" + "\n".join(textes_slide))
         texte = "\n\n".join(diapos)
-        
     elif nom.endswith(".txt"):
         texte = uploaded_file.read().decode("utf-8", errors="ignore")
-        
     return texte
 
-# --- FONCTIONS DE MISE EN FORME WORD (.DOCX) ---
+# --- OUTILS DE FORMATAGE WORD CONFORMES AUX EXEMPLES ---
 def appliquer_arriere_plan(cell, color_hex):
     tcPr = cell._tc.get_or_add_tcPr()
     tcPr.append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>'))
 
-def configurer_marges_cellule(cell, top=100, bottom=100, left=140, right=140):
+def configurer_marges_cellule(cell, top=70, bottom=70, left=100, right=100):
     tcPr = cell._tc.get_or_add_tcPr()
     tcMar = parse_xml(f'<w:tcMar {nsdecls("w")}>'
                       f'<w:top w:w="{top}" w:type="dxa"/>'
@@ -96,18 +93,18 @@ def configurer_marges_cellule(cell, top=100, bottom=100, left=140, right=140):
                       f'</w:tcMar>')
     tcPr.append(tcMar)
 
-def ecrire_cellule(cell, text, gras=False, couleur=(0, 0, 0), taille=9.5, align=WD_ALIGN_PARAGRAPH.LEFT, fond=None):
+def ecrire_cellule(cell, text, gras=False, couleur=(0, 0, 0), taille=9, align=WD_ALIGN_PARAGRAPH.LEFT, fond=None):
     cell.text = ""
-    lignes = text.strip().split("\n")
+    lignes = str(text).strip().split("\n")
     for i, ligne in enumerate(lignes):
         ligne_propre = ligne.strip()
         if not ligne_propre:
             continue
         p = cell.paragraphs[0] if i == 0 else cell.add_paragraph()
         p.alignment = align
-        p.paragraph_format.space_before = Pt(2)
-        p.paragraph_format.space_after = Pt(2)
-        p.paragraph_format.line_spacing = 1.15
+        p.paragraph_format.space_before = Pt(1.5)
+        p.paragraph_format.space_after = Pt(1.5)
+        p.paragraph_format.line_spacing = 1.1
         
         run = p.add_run(ligne_propre)
         run.bold = gras
@@ -119,111 +116,122 @@ def ecrire_cellule(cell, text, gras=False, couleur=(0, 0, 0), taille=9.5, align=
     if fond:
         appliquer_arriere_plan(cell, fond)
 
-# --- GÉNÉRATION DE LA FICHE PÉDAGOGIQUE EN .DOCX ---
-def generer_document_docx(data):
+# --- GÉNÉRATION DU DOCUMENT DOCX STRICTEMENT IDENTIQUE AUX MODÈLES ---
+def generer_document_docx_officiel(data):
     doc = Document()
     
-    # Marges du document (1.5 cm)
+    # Marges fines (1.2 cm) pour tenir sur format standard
     for section in doc.sections:
-        section.top_margin = Inches(0.6)
-        section.bottom_margin = Inches(0.6)
-        section.left_margin = Inches(0.6)
-        section.right_margin = Inches(0.6)
+        section.top_margin = Inches(0.47)
+        section.bottom_margin = Inches(0.47)
+        section.left_margin = Inches(0.47)
+        section.right_margin = Inches(0.47)
 
-    # 1. Bannière Titre
-    banniere = doc.add_paragraph()
-    banniere.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    banniere.paragraph_format.space_after = Pt(6)
-    r_titre = banniere.add_run("Fiche technique - Séance d'apprentissage / Remédiation -")
-    r_titre.bold = True
-    r_titre.font.size = Pt(13)
-    r_titre.font.color.rgb = RGBColor(23, 54, 93)
-
-    # 2. Tableau 1 : Cadre Administratif (5 colonnes)
-    t1 = doc.add_table(rows=2, cols=5)
-    t1.alignment = WD_TABLE_ALIGNMENT.CENTER
-    t1.style = 'Table Grid'
+    # 1. En-tête : Tableau 3 colonnes (Séance/Niveau | Titre Fiche | Professeur/Leçon)
+    t_header = doc.add_table(rows=2, cols=3)
+    t_header.alignment = WD_TABLE_ALIGNMENT.CENTER
+    t_header.style = 'Table Grid'
     
-    entetes_t1 = ["AREF", "Direction provinciale", "Collège / Établissement", "Nom de l'enseignant", "Niveau scolaire"]
-    for i, h in enumerate(entetes_t1):
-        ecrire_cellule(t1.rows[0].cells[i], h, gras=True, couleur=(255, 255, 255), fond="1F4E79", align=WD_ALIGN_PARAGRAPH.CENTER)
+    col_w_header = [Inches(2.2), Inches(3.1), Inches(2.2)]
+    
+    ecrire_cellule(t_header.rows[0].cells[0], f"Séance : {data.get('seance', '1/2')}\nNiveau : {data.get('niveau', '3ème AC')}", gras=True, fond="F2F2F2")
+    ecrire_cellule(t_header.rows[0].cells[1], "Fiche Pédagogique", gras=True, taille=13, align=WD_ALIGN_PARAGRAPH.CENTER, fond="E8EEF5", couleur=(23, 54, 93))
+    ecrire_cellule(t_header.rows[0].cells[2], f"Prof : {data.get('enseignant', 'BOUSHIB Nezha')}", gras=True, align=WD_ALIGN_PARAGRAPH.RIGHT, fond="F2F2F2")
+    
+    # Ligne 2 : Titre de la leçon centré
+    cell_lecon = t_header.rows[1].cells[0].merge(t_header.rows[1].cells[1]).merge(t_header.rows[1].cells[2])
+    ecrire_cellule(cell_lecon, f"{data.get('titre_lecon', 'Leçon : Physique-Chimie')}", gras=True, taille=11, align=WD_ALIGN_PARAGRAPH.CENTER, fond="D9E1F2", couleur=(23, 54, 93))
 
-    valeurs_t1 = [
-        data.get("aref", ""),
-        data.get("direction", ""),
-        data.get("etablissement", ""),
-        data.get("enseignant", ""),
-        data.get("niveau", "")
-    ]
-    for i, val in enumerate(valeurs_t1):
-        ecrire_cellule(t1.rows[1].cells[i], val, align=WD_ALIGN_PARAGRAPH.CENTER)
+    for row in t_header.rows:
+        for idx, w in enumerate(col_w_header):
+            if idx < len(row.cells):
+                row.cells[idx].width = w
 
     doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
-    # 3. Tableau 2 : Cadrage Didactique
-    t2 = doc.add_table(rows=5, cols=2)
-    t2.alignment = WD_TABLE_ALIGNMENT.CENTER
-    t2.style = 'Table Grid'
+    # 2. Tableau Cadrage Pédagogique (Objectifs, Question séance, Prérequis, Concepts)
+    t_cadre = doc.add_table(rows=2, cols=2)
+    t_cadre.alignment = WD_TABLE_ALIGNMENT.CENTER
+    t_cadre.style = 'Table Grid'
+    t_cadre.rows[0].cells[0].width = Inches(4.5)
+    t_cadre.rows[0].cells[1].width = Inches(3.0)
+    t_cadre.rows[1].cells[0].width = Inches(4.5)
+    t_cadre.rows[1].cells[1].width = Inches(3.0)
+
+    # Cellule Objectifs
+    txt_obj = "Objectifs (Connaissances et Capacités) :\n" + "\n".join([f"• {o}" for o in data.get("objectifs", [])])
+    ecrire_cellule(t_cadre.rows[0].cells[0], txt_obj)
     
-    for row in t2.rows:
-        row.cells[0].width = Inches(2.3)
-        row.cells[1].width = Inches(5.2)
+    # Cellule Question de la Séance
+    txt_question = f"Question de la Séance :\n{data.get('question_seance', '')}"
+    ecrire_cellule(t_cadre.rows[0].cells[1], txt_question, gras=True, fond="F9FBFD")
 
-    champs_t2 = [
-        ("Semaine", data.get("semaine", "01")),
-        ("Domaine", data.get("domaine", "")),
-        ("Séance", data.get("seance", "")),
-        ("Tâche", data.get("tache", "")),
-        ("Supports didactiques nécessaires", data.get("supports", "Support PPT, ardoises et tableau"))
+    # Cellule Prérequis
+    txt_prerequis = "Prérequis :\n" + "\n".join([f"- {p}" for p in data.get("prerequis", [])])
+    ecrire_cellule(t_cadre.rows[1].cells[0], txt_prerequis)
+
+    # Cellule Concepts
+    txt_concepts = "Concepts clés :\n" + "\n".join([f"- {c}" for c in data.get("concepts", [])])
+    ecrire_cellule(t_cadre.rows[1].cells[1], txt_concepts)
+
+    doc.add_paragraph().paragraph_format.space_after = Pt(2)
+
+    # 3. Tableau Principal des Activités (6 colonnes conforme aux documents modèles)
+    activites = data.get("activites", [])
+    t_act = doc.add_table(rows=1 + len(activites), cols=6)
+    t_act.alignment = WD_TABLE_ALIGNMENT.CENTER
+    t_act.style = 'Table Grid'
+
+    col_widths = [Inches(1.8), Inches(1.1), Inches(1.6), Inches(1.6), Inches(0.55), Inches(0.85)]
+    entetes = [
+        "Bilan de chaque activité\n(Résumé / Notions)",
+        "Supports",
+        "Activité de l'élève",
+        "Activité du prof",
+        "Durée",
+        "Activités Interactives"
     ]
-    for idx, (label, val) in enumerate(champs_t2):
-        ecrire_cellule(t2.rows[idx].cells[0], label, gras=True, fond="D9E1F2")
-        ecrire_cellule(t2.rows[idx].cells[1], val)
+    for idx, h in enumerate(entetes):
+        ecrire_cellule(t_act.rows[0].cells[idx], h, gras=True, taille=8.5, fond="1F4E79", couleur=(255, 255, 255), align=WD_ALIGN_PARAGRAPH.CENTER)
 
-    # Titre Tableau d'activités
-    st_p = doc.add_paragraph()
-    st_p.paragraph_format.space_before = Pt(6)
-    st_p.paragraph_format.space_after = Pt(4)
-    r_st = st_p.add_run("Plan détaillé des activités de la séance")
-    r_st.bold = True
-    r_st.font.size = Pt(11)
-    r_st.font.color.rgb = RGBColor(23, 54, 93)
+    for idx, act in enumerate(activites):
+        row = t_act.rows[1 + idx]
+        # Colonne 1 : Bilan / Résumé
+        ecrire_cellule(row.cells[0], act.get("bilan_contenu", ""), taille=8.5)
+        # Colonne 2 : Supports
+        ecrire_cellule(row.cells[1], act.get("supports", ""), taille=8.5)
+        # Colonne 3 : Activité de l'élève
+        ecrire_cellule(row.cells[2], act.get("activite_eleve", ""), taille=8.5)
+        # Colonne 4 : Activité du professeur
+        ecrire_cellule(row.cells[3], act.get("activite_prof", ""), taille=8.5)
+        # Colonne 5 : Durée
+        ecrire_cellule(row.cells[4], act.get("duree", "15 min"), taille=8.5, align=WD_ALIGN_PARAGRAPH.CENTER)
+        # Colonne 6 : Type & Question interactive
+        desc_inter = f"{act.get('type_etape', '')}\n\n{act.get('questions_interactives', '')}"
+        ecrire_cellule(row.cells[5], desc_inter, gras=True, taille=8, align=WD_ALIGN_PARAGRAPH.CENTER, fond="F2F2F2")
 
-    # 4. Tableau 3 : Plan détaillé (Étapes, Enseignant, Élève, Temps, Page)
-    etapes = data.get("etapes", [])
-    t3 = doc.add_table(rows=2 + len(etapes), cols=5)
-    t3.alignment = WD_TABLE_ALIGNMENT.CENTER
-    t3.style = 'Table Grid'
-
-    col_widths = [Inches(1.2), Inches(3.0), Inches(2.3), Inches(0.6), Inches(0.6)]
-
-    # Fusion d'en-tête pour "Descriptif"
-    c_etape = t3.rows[0].cells[0]
-    c_desc = t3.rows[0].cells[1].merge(t3.rows[0].cells[2])
-    c_temps = t3.rows[0].cells[3]
-    c_page = t3.rows[0].cells[4]
-
-    ecrire_cellule(c_etape, "Étapes", gras=True, couleur=(255, 255, 255), fond="1F4E79", align=WD_ALIGN_PARAGRAPH.CENTER)
-    ecrire_cellule(c_desc, "Descriptif", gras=True, couleur=(255, 255, 255), fond="1F4E79", align=WD_ALIGN_PARAGRAPH.CENTER)
-    ecrire_cellule(c_temps, "Temps", gras=True, couleur=(255, 255, 255), fond="1F4E79", align=WD_ALIGN_PARAGRAPH.CENTER)
-    ecrire_cellule(c_page, "Page", gras=True, couleur=(255, 255, 255), fond="1F4E79", align=WD_ALIGN_PARAGRAPH.CENTER)
-
-    ecrire_cellule(t3.rows[1].cells[0], "", fond="D9E1F2")
-    ecrire_cellule(t3.rows[1].cells[1], "Rôle de l'enseignant", gras=True, fond="D9E1F2", align=WD_ALIGN_PARAGRAPH.CENTER)
-    ecrire_cellule(t3.rows[1].cells[2], "Activité de l'élève", gras=True, fond="D9E1F2", align=WD_ALIGN_PARAGRAPH.CENTER)
-    ecrire_cellule(t3.rows[1].cells[3], "", fond="D9E1F2")
-    ecrire_cellule(t3.rows[1].cells[4], "", fond="D9E1F2")
-
-    for idx, etape in enumerate(etapes):
-        row = t3.rows[2 + idx]
-        ecrire_cellule(row.cells[0], etape.get("nom", ""), gras=True, fond="F2F2F2", align=WD_ALIGN_PARAGRAPH.CENTER)
-        ecrire_cellule(row.cells[1], etape.get("role_enseignant", ""))
-        ecrire_cellule(row.cells[2], etape.get("activite_eleve", ""))
-        ecrire_cellule(row.cells[3], etape.get("temps", ""), align=WD_ALIGN_PARAGRAPH.CENTER)
-        ecrire_cellule(row.cells[4], etape.get("page", ""), align=WD_ALIGN_PARAGRAPH.CENTER)
-
-    for row in t3.rows:
+    for row in t_act.rows:
         for idx, w in enumerate(col_widths):
+            row.cells[idx].width = w
+
+    doc.add_paragraph().paragraph_format.space_after = Pt(2)
+
+    # 4. Tableau d'Évaluation & Remédiation (Pied de page)
+    t_eval = doc.add_table(rows=2, cols=3)
+    t_eval.alignment = WD_TABLE_ALIGNMENT.CENTER
+    t_eval.style = 'Table Grid'
+    
+    w_eval = [Inches(2.7), Inches(2.7), Inches(2.1)]
+    titres_eval = ["Connaissances évaluables :", "Capacités évaluables :", "Obstacles rencontrés & Remédiation :"]
+    for idx, t in enumerate(titres_eval):
+        ecrire_cellule(t_eval.rows[0].cells[idx], t, gras=True, fond="D9E1F2", couleur=(23, 54, 93))
+
+    ecrire_cellule(t_eval.rows[1].cells[0], data.get("connaissances_evaluables", ""))
+    ecrire_cellule(t_eval.rows[1].cells[1], data.get("capacites_evaluables", ""))
+    ecrire_cellule(t_eval.rows[1].cells[2], data.get("obstacles_remediation", "Difficulté de représentation abstraite / Remédiation par modélisation ou simulation."))
+
+    for row in t_eval.rows:
+        for idx, w in enumerate(w_eval):
             row.cells[idx].width = w
 
     buf = io.BytesIO()
@@ -231,171 +239,172 @@ def generer_document_docx(data):
     buf.seek(0)
     return buf
 
-# --- APPLICATION PRINCIPALE ---
-st.markdown("<h2 style='color:#1F4E79;'>📋 Générateur de Fiche Pédagogique</h2>", unsafe_allow_html=True)
-st.caption("Modèle d'Enseignement Explicite — Collèges Pionniers")
+# --- INTERFACE ENSEIGNANT CLAIRE ET ÉPURÉE ---
+st.markdown("<h2 style='color:#17365D;'>⚗️ Générateur de Fiches Pédagogiques de Physique-Chimie</h2>", unsafe_allow_html=True)
+st.caption("Modèle officiel d'inspection (Collèges) — Conforme aux Orientations et Programmes Annuels du Maroc")
 
 with st.sidebar:
-    st.header("⚙️ Configuration")
-    # Récupération automatique de la clé API si stockée dans les secrets Streamlit, sinon saisie manuelle
-    api_key_default = st.secrets.get("GEMINI_API_KEY", "") if hasattr(st, "secrets") else ""
-    api_key = st.text_input("Clé API Google Gemini :", value=api_key_default, type="password")
+    st.header("📋 Paramètres de la séance")
+    ens_nom = st.text_input("Professeur :", value="Mme BOUSHIB Nezha")
+    niveau_select = st.selectbox(
+        "Niveau scolaire :",
+        ["1ère AC (1ère Année Collège)", "2ème AC (2ème Année Collège)", "3ème AC (3ème Année Collège)"],
+        index=2
+    )
+    seance_num = st.selectbox("Séance :", ["Séance 1/2", "Séance 2/2", "Séance 1/3", "Séance 2/3", "Séance 3/3", "Séance Unique (1/1)"], index=0)
+    titre_manuel = st.text_input("Intitulé / Leçon :", value="Leçon : Atomes et Ions")
     
     st.divider()
-    st.subheader("Informations Générales")
-    ens_val = st.text_input("Nom de l'enseignant :", value="Enseignant")
-    aref_val = st.text_input("AREF :", value="Draa - Tafilalt")
-    dir_val = st.text_input("Direction provinciale :", value="Errachidia")
-    col_val = st.text_input("Établissement :", value="Moulay Rachid")
-    niv_val = st.text_input("Niveau :", value="2AC")
-    sem_val = st.text_input("Semaine :", value="01")
-    
-    if st.button("Se déconnecter"):
+    if st.button("🚪 Se déconnecter", use_container_width=True):
         st.session_state.authentifie = False
         st.rerun()
 
-# Section Dépôt de cours
-col_upload, col_texte = st.columns([1, 1])
+col_u, col_t = st.columns([1.1, 0.9])
 
-with col_upload:
-    st.markdown("#### 1. Déposer le support de cours")
-    fichier_charge = st.file_uploader(
-        "Fichiers acceptés : PDF, Word (.docx), PowerPoint (.pptx), Texte (.txt)",
+with col_u:
+    st.markdown("#### 1. Support de cours officiel")
+    fichier_cours = st.file_uploader(
+        "Déposer le support de cours (PDF, Word, PowerPoint, Texte) :",
         type=["pdf", "docx", "pptx", "txt"]
     )
 
-with col_texte:
-    st.markdown("#### 2. Ou coller le résumé / plan du cours")
-    texte_manuel = st.text_area("Texte du cours :", height=130, placeholder="Collez ici le résumé ou plan si vous n'avez pas de fichier...")
+with col_t:
+    st.markdown("#### 2. Ou coller des remarques didactiques / résumé")
+    texte_libre = st.text_area("Notes sur le contenu / activités :", height=135, placeholder="Ex: Insister sur la distinction cation/anion et l'activité documentaire sur les étiquettes d'eau minérale...")
 
-contenu_cours = ""
-if fichier_charge is not None:
+contenu_source = ""
+if fichier_cours is not None:
     try:
-        contenu_cours = extraire_texte(fichier_charge)
-        st.info(f"📄 Document '{fichier_charge.name}' extrait avec succès ({len(contenu_cours)} caractères).")
+        contenu_source = extraire_texte(fichier_cours)
+        st.success(f"✅ Document '{fichier_cours.name}' analysé avec succès !")
     except Exception as e:
-        st.error(f"Erreur lors de la lecture du fichier : {e}")
-elif texte_manuel.strip():
-    contenu_cours = texte_manuel.strip()
+        st.error(f"Erreur de lecture du document : {e}")
+elif texte_libre.strip():
+    contenu_source = texte_libre.strip()
 
 st.divider()
 
-if st.button("🚀 Générer la Fiche Pédagogique Word (.DOCX)", type="primary", use_container_width=True):
+if st.button("🚀 Générer la Fiche Pédagogique Officielle (.DOCX)", type="primary", use_container_width=True):
     if not api_key:
-        st.error("Veuillez renseigner votre clé API Gemini dans le panneau latéral.")
-    elif not contenu_cours.strip():
-        st.warning("Veuillez déposer un document ou coller le contenu de la séance.")
+        st.error("Clé API non configurée. Veuillez vérifier les Secrets dans Streamlit.")
+    elif not contenu_source.strip():
+        st.warning("Veuillez fournir un support de cours (fichier ou texte) avant de lancer la génération.")
     else:
-        with st.spinner("Analyse didactique du cours et mise en page selon les normes officielles..."):
+        with st.spinner("Conception de la fiche selon le modèle officiel et les instructions du programme annuel..."):
             try:
                 client = genai.Client(api_key=api_key)
                 
-                consigne = f"""
-                Tu es un inspecteur pédagogique expert en Enseignement Explicite (modèle Collège Pionnier).
-                À partir du support de cours ci-dessous, tu dois produire une fiche de séance complète et rigoureuse.
-                
-                Les étapes d'enseignement explicite requises sont :
-                1. "Ouverture" (Accueil, rappel des prérequis, lexique clé, annonce de l'objectif)
-                2. "Modelage" (Explicitation magistrale, étapes détaillées, formulation à voix haute, anticipation des erreurs fréquentes)
-                3. "Pratique guidée Collective" (Application collective guidée par le questionnement, rétroaction immédiate)
-                4. "Pratique guidée en binôme" (Travail par 2, observation et étayage sans donner la solution)
-                5. "Pratique autonome" (Activités individuelles, exercices d'application, consolidation et défi)
-                6. "Clôture" (Bilan, reformulation de la règle/démarche, carte conceptuelle ou lexicale)
+                prompt = f"""
+                Tu es un inspecteur pédagogique de l'enseignement secondaire collégial marocain en Physique-Chimie.
+                Tu dois générer une fiche pédagogique Word rigoureuse, exactement identique aux fiches modèles d'inspection du Maroc.
+
+                NIVEAU CHOISI : {niveau_select}
+                SÉANCE : {seance_num}
+                INTITULÉ DE LA LEÇON : {titre_manuel}
+
+                RÈGLES DIDACTIQUES ET PÉDAGOGIQUES DU PROGRAMME :
+                1. Respecte scrupuleusement les Orientations Pédagogiques officielles du Ministère :
+                   - 1AC : Matière & Environnement, Électricité (circuit simple, dipôles, lois des nœuds/tensions).
+                   - 2AC : Matière & Environnement (air, molécules, atomes, réactions chimiques), Lumière et Optique (propagation, lentilles, dispersion), Électricité (courant alternatif, installation domestique).
+                   - 3AC : Matériaux (matière/objets, atomes et ions, réactions avec l'air et les solutions pH), Mécanique (mouvement, repos, vitesse, actions mécaniques, forces, équilibre, poids/masse), Électricité (loi d'Ohm, puissance, énergie).
+                2. Structure de la séance obligatoire en 3 étapes :
+                   - "Activité Introductive" (10 min) : Rappel des prérequis, question de la séance (situation-problème), formulation des hypothèses par les élèves.
+                   - "Activité Constructive" (30 min) : Investigation, activités documentaires ou expérimentales (avec matériel précis de labo de collège), manipulation, déductions et calculs des élèves, institutionnalisation intermédiaire.
+                   - "BILAN" (20 min) : Synthèse collective, résumé structuré à copier, exercices d'application immédiate.
 
                 Réponds STRICTEMENT par un objet JSON valide suivant exactement cette structure :
                 {{
-                  "domaine": "ex: Domaine 01 - Masse et volume",
-                  "seance": "ex: Séance 1 - Titre de la séance",
-                  "tache": "Description précise de la tâche opérationnelle de l'élève",
-                  "supports": "Support PPT, ardoises, matériel d'expérimentation, tableau",
-                  "etapes": [
+                  "titre_lecon": "{titre_manuel}",
+                  "question_seance": "Formulation claire de la question-problème de départ",
+                  "objectifs": [
+                    "Connaître...",
+                    "Savoir écrire...",
+                    "Distinguer entre..."
+                  ],
+                  "prerequis": [
+                    "Prérequis 1",
+                    "Prérequis 2",
+                    "Prérequis 3"
+                  ],
+                  "concepts": [
+                    "Concept 1",
+                    "Concept 2"
+                  ],
+                  "activites": [
                     {{
-                      "nom": "Ouverture",
-                      "role_enseignant": "• Accueillir les élèves...\\n• Activer les prérequis...\\n• Annoncer l'objectif...",
-                      "activite_eleve": "Répondre aux questions, rappeler les prérequis, noter l'objectif...",
-                      "temps": "10 min",
-                      "page": ""
+                      "type_etape": "Activité Introductive",
+                      "duree": "10 min",
+                      "bilan_contenu": "• Poser la question de la séance\\n• Comprendre le problème posé\\n• Proposer des hypothèses",
+                      "supports": "- Documents du manuel\\n- Exemples du quotidien\\n- Tableau",
+                      "activite_eleve": "- Répondre aux questions et vérifier ses prérequis.\\n- Lire et s'approprier la situation.\\n- Formuler des hypothèses.",
+                      "activite_prof": "- Poser les questions de réactivation.\\n- Écrire la situation-problème au tableau.\\n- Recueillir et noter les hypothèses des élèves.",
+                      "questions_interactives": "Discussion ouverte avec les élèves sur la situation de départ."
                     }},
                     {{
-                      "nom": "Modelage",
-                      "role_enseignant": "• Présenter la méthode pas à pas...\\n• Verbaliser le raisonnement...\\n• Signaler les erreurs fréquentes...",
-                      "activite_eleve": "Observer, écouter, mémoriser la démarche modélisée...",
-                      "temps": "10 min",
-                      "page": "Page : 05"
+                      "type_etape": "Activité Constructive",
+                      "duree": "30 min",
+                      "bilan_contenu": "Résumé du contenu notionnel construit :\\nI- Définitions et règles...\\n- Démonstrations ou résultats d'expériences...",
+                      "supports": "- Matériel de laboratoire (éprouvettes, multimètre, etc.)\\n- Fiche d'activité documentaire\\n- Tableau",
+                      "activite_eleve": "- Réaliser l'expérience ou analyser le document.\\n- Interpréter les résultats et répondre aux consignes.\\n- Déduire la règle ou la loi physique/chimique.",
+                      "activite_prof": "- Guider l'investigation sans donner la solution.\\n- Poser les questions de guidage.\\n- Superviser les mesures et manipulations expérimentales.",
+                      "questions_interactives": "Questions clés guidant la démarche d'investigation."
                     }},
                     {{
-                      "nom": "Pratique guidée Collective",
-                      "role_enseignant": "Proposer une situation d'application, guider par le questionnement...",
-                      "activite_eleve": "Appliquer la démarche, expliciter la solution...",
-                      "temps": "12 min",
-                      "page": "Page : 06"
-                    }},
-                    {{
-                      "nom": "Pratique guidée en binôme",
-                      "role_enseignant": "Circuler, observer, soutenir les binômes...",
-                      "activite_eleve": "Échanger avec son binôme, justifier son résultat...",
-                      "temps": "8 min",
-                      "page": "Page : 06"
-                    }},
-                    {{
-                      "nom": "Pratique autonome",
-                      "role_enseignant": "Donner les exercices d'application, proposer un défi pour les élèves avancés...",
-                      "activite_eleve": "Résoudre en autonomie, s'auto-évaluer...",
-                      "temps": "10 min",
-                      "page": "Page : 07"
-                    }},
-                    {{
-                      "nom": "Clôture",
-                      "role_enseignant": "Faire le bilan des apprentissages et retenir la formule / règle...",
-                      "activite_eleve": "Reformuler les acquis et compléter le bilan...",
-                      "temps": "10 min",
-                      "page": ""
+                      "type_etape": "BILAN",
+                      "duree": "20 min",
+                      "bilan_contenu": "Synthèse et Institutionnalisation :\\n- Retenir l'essentiel du cours.\\n- Exercice d'application résolu.",
+                      "supports": "- Tableau\\n- Manuel scolaire / Cahier de cours",
+                      "activite_eleve": "- Participer à l'élaboration de la synthèse.\\n- Noter le cours sur le cahier.\\n- Résoudre l'exercice d'évaluation formative.",
+                      "activite_prof": "- Structurer la réponse finale à la question de départ.\\n- Dicter/noter le résumé institutionnel.\\n- Proposer l'exercice d'évaluation.",
+                      "questions_interactives": "Évaluation formative et bilan des acquis."
                     }}
-                  ]
+                  ],
+                  "connaissances_evaluables": "Connaissances clés à évaluer lors du contrôle...",
+                  "capacites_evaluables": "Capacités méthodologiques et d'analyse évaluables...",
+                  "obstacles_remediation": "Obstacle didactique prévisible et remédiation pédagogique proposée."
                 }}
 
-                Support de cours à analyser :
-                \"\"\"{contenu_cours[:16000]}\"\"\"
+                Support de cours à traiter :
+                \"\"\"{contenu_source[:15000]}\"\"\"
                 """
 
                 reponse = client.models.generate_content(
                     model="gemini-2.5-flash",
-                    contents=consigne,
+                    contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         temperature=0.2
                     )
                 )
 
-                fiche_json = json.loads(reponse.text)
+                fiche_data = json.loads(reponse.text)
                 
-                # Injection des métadonnées choisies
-                fiche_json["aref"] = aref_val
-                fiche_json["direction"] = dir_val
-                fiche_json["etablissement"] = col_val
-                fiche_json["enseignant"] = ens_val
-                fiche_json["niveau"] = niv_val
-                fiche_json["semaine"] = sem_val
+                # Injection des métadonnées du professeur
+                fiche_data["enseignant"] = ens_nom
+                fiche_data["niveau"] = niveau_select.split(" ")[0]
+                fiche_data["seance"] = seance_num
+                if not fiche_data.get("titre_lecon"):
+                    fiche_data["titre_lecon"] = titre_manuel
 
-                doc_buffer = generer_document_docx(fiche_json)
+                doc_docx = generer_document_docx_officiel(fiche_data)
 
-                st.success("🎉 Votre fiche pédagogique a été générée avec succès !")
+                st.success("🎉 Fiche pédagogique générée avec succès selon le modèle officiel !")
+
+                nom_fichier = f"{fiche_data['niveau']}_{fiche_data['seance'].replace('/', '-')}_{fiche_data['titre_lecon'].replace(' ', '_')}.docx"
                 
                 st.download_button(
-                    label="📥 Télécharger la Fiche au format Word (.DOCX)",
-                    data=doc_buffer,
-                    file_name=f"{niv_val}_Fiche_{fiche_json.get('seance', 'Seance').replace(' ', '_')}.docx",
+                    label="📥 Télécharger la Fiche Officielle Word (.DOCX)",
+                    data=doc_docx,
+                    file_name=nom_fichier,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     type="primary"
                 )
 
-                with st.expander("Consulter le contenu détaillé de la fiche"):
-                    st.write(f"**Tâche :** {fiche_json.get('tache')}")
-                    st.write(f"**Supports :** {fiche_json.get('supports')}")
-                    for step in fiche_json.get("etapes", []):
-                        st.markdown(f"**{step.get('nom')} ({step.get('temps')}) :**")
-                        st.write(f"- *Rôle Enseignant :* {step.get('role_enseignant')}")
-                        st.write(f"- *Activité Élève :* {step.get('activite_eleve')}")
+                with st.expander("👁️ Prévisualiser les éléments de la fiche générée"):
+                    st.write(f"**Question de départ :** {fiche_data.get('question_seance')}")
+                    st.write("**Objectifs :**", fiche_data.get("objectifs"))
+                    st.write("**Prérequis :**", fiche_data.get("prerequis"))
+                    st.write("**Concepts :**", fiche_data.get("concepts"))
 
             except Exception as e:
-                st.error(f"Une erreur est survenue lors du traitement : {e}")
+                st.error(f"Une erreur est survenue pendant la génération : {e}")
