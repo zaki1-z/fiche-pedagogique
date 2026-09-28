@@ -2,7 +2,6 @@ import io
 import json
 import time
 import zipfile
-import base64
 import xml.etree.ElementTree as ET
 import streamlit as st
 from docx import Document
@@ -16,7 +15,6 @@ from google.genai import types
 import pypdf
 from pptx import Presentation
 
-# Configuration de la page
 st.set_page_config(
     page_title="Portail Pédagogique - Physique-Chimie Collège",
     page_icon="⚗️",
@@ -24,10 +22,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Clé API invisible via Secrets
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
-# Initialisation Session State
 if "authentifie" not in st.session_state:
     st.session_state.authentifie = False
 if "prof_nom_connecte" not in st.session_state:
@@ -54,7 +50,6 @@ def verifier_acces():
     else:
         st.error("Mot de passe incorrect. Le mot de passe attendu est votre nom sans espace suivi de '2026@'.")
 
-# --- LOGO OFFICIEL DU MINISTÈRE EN EMBEDDED BASE64 (AUTONOME ET GARANTI) ---
 LOGO_MEN_BASE64 = (
     "data:image/svg+xml;utf8,"
     "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 250' width='320' height='200'%3E"
@@ -83,7 +78,6 @@ LOGO_MEN_BASE64 = (
     "%3C/svg%3E"
 )
 
-# --- PAGE D'AUTHENTIFICATION ---
 if not st.session_state.authentifie:
     col_c1, col_c2, col_c3 = st.columns([1, 1.2, 1])
     with col_c2:
@@ -107,7 +101,6 @@ if not st.session_state.authentifie:
         st.button("Accéder au Générateur ➔", type="primary", use_container_width=True, on_click=verifier_acces)
     st.stop()
 
-# --- EXTRACTION PPTX ROBUSTE ---
 def extraire_texte_pptx(uploaded_file):
     textes = []
     try:
@@ -144,7 +137,6 @@ def extraire_texte_pptx(uploaded_file):
     
     return "\n".join(textes)
 
-# --- EXTRACTION MULTI-FORMATS ---
 def extraire_texte(uploaded_file):
     nom = uploaded_file.name.lower()
     texte = ""
@@ -163,7 +155,6 @@ def extraire_texte(uploaded_file):
         texte = uploaded_file.read().decode("utf-8", errors="ignore")
     return texte
 
-# --- FORMATAGE WORD AUX STANDARDS OFFICIELS ---
 def appliquer_arriere_plan(cell, color_hex):
     tcPr = cell._tc.get_or_add_tcPr()
     tcPr.append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>'))
@@ -389,7 +380,7 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 2. "Activité Constructive" (30 min)
                 3. "BILAN" (20 min)
 
-                Réponds STRICTEMENT par un JSON valide :
+                Réponds STRICTEMENT par un objet JSON valide structuré comme suit :
                 {{
                   "lecon_detectee": "Nom officiel de la leçon",
                   "nombre_seances": 2,
@@ -492,11 +483,26 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                     raise Exception(f"Erreur d'accès à l'API : {derniere_err}")
 
                 resultat_json = json.loads(reponse.text)
-                liste_seances = resultat_json.get("seances", [])
-                st.session_state.nom_lecon_global = resultat_json.get("lecon_detectee", titre_manuel or "Leçon Physique-Chimie")
+                
+                # Normalisation sécurisée : gestion que ce soit un dict ou une list
+                if isinstance(resultat_json, list):
+                    liste_seances = resultat_json
+                    nom_lecon_global = titre_manuel or "Leçon Physique-Chimie"
+                elif isinstance(resultat_json, dict):
+                    liste_seances = resultat_json.get("seances", [])
+                    if not liste_seances and "activites" in resultat_json:
+                        liste_seances = [resultat_json]
+                    nom_lecon_global = resultat_json.get("lecon_detectee", titre_manuel or "Leçon Physique-Chimie")
+                else:
+                    liste_seances = []
+                    nom_lecon_global = titre_manuel or "Leçon Physique-Chimie"
+
+                st.session_state.nom_lecon_global = nom_lecon_global
 
                 fichiers_prepares = []
                 for idx, fiche_data in enumerate(liste_seances):
+                    if not isinstance(fiche_data, dict):
+                        continue
                     fiche_data["enseignant"] = ens_nom.strip()
                     fiche_data["niveau"] = niveau_select.split(" ")[0]
                     fiche_data["seance"] = fiche_data.get("seance_label", f"Séance {idx+1}/{len(liste_seances)}")
@@ -504,7 +510,7 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                         fiche_data["titre_lecon"] = st.session_state.nom_lecon_global
 
                     docx_bytes = generer_document_docx_officiel(fiche_data)
-                    seance_clean = fiche_data['seance'].replace('/', '-').replace(' ', '_')
+                    seance_clean = str(fiche_data['seance']).replace('/', '-').replace(' ', '_')
                     nom_f = f"{fiche_data['niveau']}_{seance_clean}_{st.session_state.nom_lecon_global.replace(' ', '_')}.docx"
                     
                     fichiers_prepares.append({
