@@ -82,7 +82,7 @@ if not st.session_state.authentifie:
         st.button("Accéder au Générateur ➔", type="primary", use_container_width=True, on_click=verifier_acces)
     st.stop()
 
-# --- EXTRACTION PPTX ULTRA-ROBUSTE ---
+# --- EXTRACTION PPTX ROBUSTE ---
 def extraire_texte_pptx(uploaded_file):
     textes = []
     try:
@@ -343,7 +343,7 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
     elif not contenu_source.strip():
         st.warning("Veuillez fournir un support de cours (fichier ou texte) avant de lancer la génération.")
     else:
-        with st.spinner("Conception didactique et génération des fiches en cours..."):
+        with st.spinner("Découverte des modèles actifs et génération des fiches par séance..."):
             try:
                 client = genai.Client(api_key=api_key)
                 
@@ -413,32 +413,60 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 }}
 
                 Support de cours à analyser :
-                \"\"\"{contenu_source[:4500]}\"\"\"
+                \"\"\"{contenu_source[:4000]}\"\"\"
                 """
 
-                # Priorité aux modèles avec quotas larges pour éviter l'erreur 429
-                modeles_candidats = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+                # Récupération dynamique des modèles réels activés sur votre compte
+                modeles_valides = []
+                try:
+                    for m in client.models.list():
+                        clean_name = m.name.replace("models/", "")
+                        methods = getattr(m, "supported_generation_methods", []) or getattr(m, "supported_actions", [])
+                        if not methods or "generateContent" in methods:
+                            if "embed" not in clean_name.lower():
+                                modeles_valides.append(clean_name)
+                except Exception:
+                    pass
+
+                # Tri pour privilégier les modèles Flash, puis Pro
+                modeles_tries = []
+                for mod in modeles_valides:
+                    if "flash" in mod.lower():
+                        modeles_tries.insert(0, mod)
+                    else:
+                        modeles_tries.append(mod)
+
+                if not modeles_tries:
+                    modeles_tries = ["gemini-3.8-flash", "gemini-3.1-pro-preview"]
+
                 reponse = None
                 derniere_err = None
 
-                for mod in modeles_candidats:
-                    try:
-                        reponse = client.models.generate_content(
-                            model=mod,
-                            contents=prompt,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                temperature=0.2
+                for mod in modeles_tries:
+                    for essai in range(2):
+                        try:
+                            reponse = client.models.generate_content(
+                                model=mod,
+                                contents=prompt,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    temperature=0.2
+                                )
                             )
-                        )
-                        if reponse and reponse.text:
-                            break
-                    except Exception as e:
-                        derniere_err = e
-                        continue
+                            if reponse and reponse.text:
+                                break
+                        except Exception as e:
+                            derniere_err = e
+                            err_str = str(e)
+                            if "429" in err_str:
+                                time.sleep(4.0)
+                            else:
+                                break
+                    if reponse and reponse.text:
+                        break
 
                 if reponse is None or not reponse.text:
-                    raise Exception(f"Quota temporaire atteint sur ce compte. Veuillez patienter 1 minute puis cliquer à nouveau ({derniere_err}).")
+                    raise Exception(f"Erreur d'accès à l'API : {derniere_err}")
 
                 resultat_json = json.loads(reponse.text)
                 liste_seances = resultat_json.get("seances", [])
