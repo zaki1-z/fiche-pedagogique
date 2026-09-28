@@ -1,5 +1,6 @@
 import io
 import json
+import zipfile
 import streamlit as st
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
@@ -72,7 +73,7 @@ def extraire_texte(uploaded_file):
                         if paragraph.text.strip():
                             textes_slide.append(paragraph.text.strip())
             if textes_slide:
-                diapos.append(f"[Diapo {i+1}]\n" + "\n".join(textes_slide))
+                diapos.append(f"[Diapositive {i+1}]\n" + "\n".join(textes_slide))
         texte = "\n\n".join(diapos)
     elif nom.endswith(".txt"):
         texte = uploaded_file.read().decode("utf-8", errors="ignore")
@@ -116,18 +117,18 @@ def ecrire_cellule(cell, text, gras=False, couleur=(0, 0, 0), taille=9, align=WD
     if fond:
         appliquer_arriere_plan(cell, fond)
 
-# --- GÉNÉRATION DU DOCUMENT DOCX STRICTEMENT IDENTIQUE AUX MODÈLES ---
+# --- GÉNÉRATION D'UNE FICHE DOCX OFFICIELLE ---
 def generer_document_docx_officiel(data):
     doc = Document()
     
-    # Marges fines (1.2 cm)
+    # Marges 1.2 cm
     for section in doc.sections:
         section.top_margin = Inches(0.47)
         section.bottom_margin = Inches(0.47)
         section.left_margin = Inches(0.47)
         section.right_margin = Inches(0.47)
 
-    # 1. En-tête : Tableau 3 colonnes (Séance/Niveau | Titre Fiche | Professeur/Leçon)
+    # 1. En-tête : Tableau 3 colonnes (Séance/Niveau | Titre Fiche | Professeur)
     t_header = doc.add_table(rows=2, cols=3)
     t_header.alignment = WD_TABLE_ALIGNMENT.CENTER
     t_header.style = 'Table Grid'
@@ -137,7 +138,7 @@ def generer_document_docx_officiel(data):
     prof_nom = data.get('enseignant', '').strip() or "........................"
     titre_lecon = data.get('titre_lecon', '').strip() or "Leçon : Physique-Chimie"
     
-    ecrire_cellule(t_header.rows[0].cells[0], f"Séance : {data.get('seance', '1/2')}\nNiveau : {data.get('niveau', '3ème AC')}", gras=True, fond="F2F2F2")
+    ecrire_cellule(t_header.rows[0].cells[0], f"Séance : {data.get('seance', 'Séance 1/1')}\nNiveau : {data.get('niveau', '3ème AC')}", gras=True, fond="F2F2F2")
     ecrire_cellule(t_header.rows[0].cells[1], "Fiche Pédagogique", gras=True, taille=13, align=WD_ALIGN_PARAGRAPH.CENTER, fond="E8EEF5", couleur=(23, 54, 93))
     ecrire_cellule(t_header.rows[0].cells[2], f"Prof : {prof_nom}", gras=True, align=WD_ALIGN_PARAGRAPH.RIGHT, fond="F2F2F2")
     
@@ -161,25 +162,21 @@ def generer_document_docx_officiel(data):
     t_cadre.rows[1].cells[0].width = Inches(4.5)
     t_cadre.rows[1].cells[1].width = Inches(3.0)
 
-    # Cellule Objectifs
     txt_obj = "Objectifs (Connaissances et Capacités) :\n" + "\n".join([f"• {o}" for o in data.get("objectifs", [])])
     ecrire_cellule(t_cadre.rows[0].cells[0], txt_obj)
     
-    # Cellule Question de la Séance
     txt_question = f"Question de la Séance :\n{data.get('question_seance', '')}"
     ecrire_cellule(t_cadre.rows[0].cells[1], txt_question, gras=True, fond="F9FBFD")
 
-    # Cellule Prérequis
     txt_prerequis = "Prérequis :\n" + "\n".join([f"- {p}" for p in data.get("prerequis", [])])
     ecrire_cellule(t_cadre.rows[1].cells[0], txt_prerequis)
 
-    # Cellule Concepts
     txt_concepts = "Concepts clés :\n" + "\n".join([f"- {c}" for c in data.get("concepts", [])])
     ecrire_cellule(t_cadre.rows[1].cells[1], txt_concepts)
 
     doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
-    # 3. Tableau Principal des Activités (6 colonnes conforme aux documents modèles)
+    # 3. Tableau Principal des Activités (6 colonnes conforme aux modèles)
     activites = data.get("activites", [])
     t_act = doc.add_table(rows=1 + len(activites), cols=6)
     t_act.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -225,7 +222,7 @@ def generer_document_docx_officiel(data):
 
     ecrire_cellule(t_eval.rows[1].cells[0], data.get("connaissances_evaluables", ""))
     ecrire_cellule(t_eval.rows[1].cells[1], data.get("capacites_evaluables", ""))
-    ecrire_cellule(t_eval.rows[1].cells[2], data.get("obstacles_remediation", "Difficulté de représentation abstraite / Remédiation par modélisation ou simulation."))
+    ecrire_cellule(t_eval.rows[1].cells[2], data.get("obstacles_remediation", "Difficulté d'abstraction / Remédiation par modélisation ou simulation."))
 
     for row in t_eval.rows:
         for idx, w in enumerate(w_eval):
@@ -236,21 +233,19 @@ def generer_document_docx_officiel(data):
     buf.seek(0)
     return buf
 
-# --- INTERFACE ENSEIGNANT CLAIRE ET ÉPURÉE ---
+# --- INTERFACE ENSEIGNANT ÉPURÉE ---
 st.markdown("<h2 style='color:#17365D;'>⚗️ Générateur de Fiches Pédagogiques de Physique-Chimie</h2>", unsafe_allow_html=True)
-st.caption("Modèle officiel d'inspection (Collèges) — Conforme aux Orientations et Programmes Annuels du Maroc")
+st.caption("Découpage automatique des séances selon le Programme Annuel & Orientations Pédagogiques Officielles (Maroc)")
 
 with st.sidebar:
     st.header("📋 Paramètres de la séance")
-    # Champs libres à saisir par l'utilisateur
     ens_nom = st.text_input("Professeur :", value="", placeholder="Ex: M. / Mme ...")
     niveau_select = st.selectbox(
         "Niveau scolaire :",
-        ["1ère AC (1ère Année Collège)", "2ème AC (2ème Année Collège)", "3ème AC (3ème Année Collège)"],
+        ["3ème AC (3ème Année Collège)", "2ème AC (2ème Année Collège)", "1ère AC (1ère Année Collège)"],
         index=0
     )
-    seance_num = st.selectbox("Séance :", ["Séance 1/2", "Séance 2/2", "Séance 1/3", "Séance 2/3", "Séance 3/3", "Séance Unique (1/1)"], index=0)
-    titre_manuel = st.text_input("Intitulé / Leçon :", value="", placeholder="Ex: Leçon 2 : Atomes et Ions")
+    titre_manuel = st.text_input("Intitulé / Leçon (Optionnel) :", value="", placeholder="Laisser vide pour détection automatique")
     
     st.divider()
     if st.button("🚪 Se déconnecter", use_container_width=True):
@@ -262,8 +257,8 @@ col_u, col_t = st.columns([1.1, 0.9])
 with col_u:
     st.markdown("#### 1. Support de cours officiel")
     fichier_cours = st.file_uploader(
-        "Déposer le support de cours (PDF, Word, PowerPoint, Texte) :",
-        type=["pdf", "docx", "pptx", "txt"]
+        "Déposer le support de cours (PowerPoint .pptx, PDF, Word .docx, Texte) :",
+        type=["pptx", "pdf", "docx", "txt"]
     )
 
 with col_t:
@@ -282,90 +277,103 @@ elif texte_libre.strip():
 
 st.divider()
 
-if st.button("🚀 Générer la Fiche Pédagogique Officielle (.DOCX)", type="primary", use_container_width=True):
+if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", type="primary", use_container_width=True):
     if not api_key:
         st.error("Clé API non configurée. Veuillez vérifier les Secrets dans Streamlit.")
     elif not contenu_source.strip():
         st.warning("Veuillez fournir un support de cours (fichier ou texte) avant de lancer la génération.")
     else:
-        with st.spinner("Conception de la fiche selon le modèle officiel et les instructions du programme annuel..."):
+        with st.spinner("Analyse du programme annuel ministériel et découpage automatique des séances en cours..."):
             try:
                 client = genai.Client(api_key=api_key)
                 
-                intitule_a_utiliser = titre_manuel.strip() if titre_manuel.strip() else "Leçon selon support"
-                
                 prompt = f"""
-                Tu es un inspecteur pédagogique de l'enseignement secondaire collégial marocain en Physique-Chimie.
-                Tu dois générer une fiche pédagogique Word rigoureuse, exactement identique aux fiches modèles d'inspection du Maroc.
+                Tu es un inspecteur pédagogique national de Physique-Chimie au Maroc (Enseignement Secondaire Collégial).
+                Ta mission est d'analyser le document de cours ci-dessous, d'identifier la leçon exacte dans le programme annuel officiel marocain, de DÉTERMINER AUTOMATIQUEMENT LE NOMBRE DE SÉANCES NÉCESSAIRES, et de produire une fiche pédagogique distincte pour CHAQUE séance.
 
-                NIVEAU CHOISI : {niveau_select}
-                SÉANCE : {seance_num}
-                INTITULÉ DE LA LEÇON : {intitule_a_utiliser}
+                NIVEAU SÉLECTIONNÉ : {niveau_select}
+                TITRE INDIQUE PAR LE PROFESSEUR : {titre_manuel.strip() if titre_manuel.strip() else "À déterminer automatiquement à partir du contenu"}
 
-                RÈGLES DIDACTIQUES ET PÉDAGOGIQUES DU PROGRAMME :
-                1. Respecte scrupuleusement les Orientations Pédagogiques officielles du Ministère :
-                   - 1AC : Matière & Environnement, Électricité (circuit simple, dipôles, lois des nœuds/tensions).
-                   - 2AC : Matière & Environnement (air, molécules, atomes, réactions chimiques), Lumière et Optique (propagation, lentilles, dispersion), Électricité (courant alternatif, installation domestique).
-                   - 3AC : Matériaux (matière/objets, atomes et ions, réactions avec l'air et les solutions pH), Mécanique (mouvement, repos, vitesse, actions mécaniques, forces, équilibre, poids/masse), Électricité (loi d'Ohm, puissance, énergie).
-                2. Structure de la séance obligatoire en 3 étapes :
-                   - "Activité Introductive" (10 min) : Rappel des prérequis, question de la séance (situation-problème), formulation des hypothèses par les élèves.
-                   - "Activité Constructive" (30 min) : Investigation, activités documentaires ou expérimentales (avec matériel précis de labo de collège), manipulation, déductions et calculs des élèves, institutionnalisation intermédiaire.
-                   - "BILAN" (20 min) : Synthèse collective, résumé structuré à copier, exercices d'application immédiate.
+                RÉFÉRENTIEL DU PROGRAMME OFFICIEL MAROCAIN :
+                - 1AC :
+                  * Matière : L'eau (2h), Trois états (8h = 4 séances), Changements d'état (4h = 2 séances), Mélanges (4h = 2 séances), Traitement de l'eau (2h = 1 séance).
+                  * Électricité : Circuit simple (3h = 1-2 séances), Types de montages (3h), Courant continu (3h), Résistance (3h), Lois des nœuds/tensions (4h = 2 séances), Dangers (3h).
+                - 2AC :
+                  * Matière : L'air (2h), Propriétés de l'air (1h), Molécules et Atomes (3h = 1-2 séances), Réaction chimique et combustions (10h = 5 séances), Produits naturels/synthétiques (2h), Pollution (2h).
+                  * Optique : Lumière (1h), Sources/Récepteurs (2h), Couleurs/Dispersion (2h), Propagation (3h), Applications/Ombres/Éclipses (2h), Lentilles minces (4h = 2 séances), Œil/Loupe (2h).
+                  * Électricité : Courant alternatif sinusoïdal (2h = 1 séance), Installation domestique (2h = 1 séance).
+                - 3AC :
+                  * Matériaux : Exemples de matériaux (2h = 1 séance), Matière et électricité - Atomes et Ions (4h = 2 SÉANCES : Séance 1/2 consacrée à la structure de l'atome, numéro atomique Z et électroneutralité ; Séance 2/2 consacrée aux ions monoatomiques/polyatomiques, formules chimiques et charges), Réactions avec l'air (4h = 2 séances), Réactions avec les solutions acides/basiques & pH (8h = 4 séances), Dangers des matériaux (2h = 1 séance).
+                  * Mécanique : Mouvement et repos (5h = 2-3 séances), Actions mécaniques (2h = 1 séance), Notion de force (3h = 1-2 séances), Équilibre sous 2 forces (2h = 1 séance), Poids et Masse (2h = 1 séance).
+                  * Électricité : Loi d'Ohm (1h = 1 séance), Puissance électrique (2h = 1 séance), Énergie électrique (3h = 1-2 séances).
 
-                Réponds STRICTEMENT par un objet JSON valide suivant exactement cette structure :
+                CONSIGNE DE DÉCOUPAGE :
+                - Si le support couvre l'ensemble d'une leçon prévue sur plusieurs séances (par exemple « Atomes et Ions » en 3AC = 2 séances), génère une liste de fiches (`seances`) avec 2 éléments : "Séance 1/2" et "Séance 2/2".
+                - Si le support ne traite qu'une seule partie ou un thème d'une heure, génère 1 fiche.
+                - Chaque fiche doit suivre rigoureusement les 3 phases de 60 minutes :
+                  1. "Activité Introductive" (10 min) : Rappel des prérequis, question de la séance (situation-problème), formulation des hypothèses.
+                  2. "Activité Constructive" (30 min) : Activité documentaire ou expérimentale concrète avec matériel de collège, raisonnement, calculs.
+                  3. "BILAN" (20 min) : Synthèse institutionnelle, résumé de la séance, exercice d'application.
+
+                Format STRICTEMENT attendu (JSON valide uniquement) :
                 {{
-                  "titre_lecon": "{intitule_a_utiliser}",
-                  "question_seance": "Formulation claire de la question-problème de départ",
-                  "objectifs": [
-                    "Connaître...",
-                    "Savoir écrire...",
-                    "Distinguer entre..."
-                  ],
-                  "prerequis": [
-                    "Prérequis 1",
-                    "Prérequis 2",
-                    "Prérequis 3"
-                  ],
-                  "concepts": [
-                    "Concept 1",
-                    "Concept 2"
-                  ],
-                  "activites": [
+                  "lecon_detectee": "Nom officiel de la leçon",
+                  "nombre_seances": 2,
+                  "seances": [
                     {{
-                      "type_etape": "Activité Introductive",
-                      "duree": "10 min",
-                      "bilan_contenu": "• Poser la question de la séance\\n• Comprendre le problème posé\\n• Proposer des hypothèses",
-                      "supports": "- Documents du manuel\\n- Exemples du quotidien\\n- Tableau",
-                      "activite_eleve": "- Répondre aux questions et vérifier ses prérequis.\\n- Lire et s'approprier la situation.\\n- Formuler des hypothèses.",
-                      "activite_prof": "- Poser les questions de réactivation.\\n- Écrire la situation-problème au tableau.\\n- Recueillir et noter les hypothèses des élèves.",
-                      "questions_interactives": "Discussion ouverte avec les élèves sur la situation de départ."
-                    }},
-                    {{
-                      "type_etape": "Activité Constructive",
-                      "duree": "30 min",
-                      "bilan_contenu": "Résumé du contenu notionnel construit :\\nI- Définitions et règles...\\n- Démonstrations ou résultats d'expériences...",
-                      "supports": "- Matériel de laboratoire (éprouvettes, multimètre, etc.)\\n- Fiche d'activité documentaire\\n- Tableau",
-                      "activite_eleve": "- Réaliser l'expérience ou analyser le document.\\n- Interpréter les résultats et répondre aux consignes.\\n- Déduire la règle ou la loi physique/chimique.",
-                      "activite_prof": "- Guider l'investigation sans donner la solution.\\n- Poser les questions de guidage.\\n- Superviser les mesures et manipulations expérimentales.",
-                      "questions_interactives": "Questions clés guidant la démarche d'investigation."
-                    }},
-                    {{
-                      "type_etape": "BILAN",
-                      "duree": "20 min",
-                      "bilan_contenu": "Synthèse et Institutionnalisation :\\n- Retenir l'essentiel du cours.\\n- Exercice d'application résolu.",
-                      "supports": "- Tableau\\n- Manuel scolaire / Cahier de cours",
-                      "activite_eleve": "- Participer à l'élaboration de la synthèse.\\n- Noter le cours sur le cahier.\\n- Résoudre l'exercice d'évaluation formative.",
-                      "activite_prof": "- Structurer la réponse finale à la question de départ.\\n- Dicter/noter le résumé institutionnel.\\n- Proposer l'exercice d'évaluation.",
-                      "questions_interactives": "Évaluation formative et bilan des acquis."
+                      "seance_label": "Séance 1/2",
+                      "titre_lecon": "Leçon : ...",
+                      "question_seance": "Question de départ posée aux élèves",
+                      "objectifs": [
+                        "Connaître...",
+                        "Savoir calculer..."
+                      ],
+                      "prerequis": [
+                        "Prérequis 1",
+                        "Prérequis 2"
+                      ],
+                      "concepts": [
+                        "Concept clé 1",
+                        "Concept clé 2"
+                      ],
+                      "activites": [
+                        {{
+                          "type_etape": "Activité Introductive",
+                          "duree": "10 min",
+                          "bilan_contenu": "• Poser la question de la séance\\n• Émettre des hypothèses",
+                          "supports": "- Tableau\\n- Documents",
+                          "activite_eleve": "- Répondre aux questions de réactivation\\n- Formuler des hypothèses",
+                          "activite_prof": "- Poser la situation-problème\\n- Noter les hypothèses au tableau",
+                          "questions_interactives": "Discussion ouverte avec la classe."
+                        }},
+                        {{
+                          "type_etape": "Activité Constructive",
+                          "duree": "30 min",
+                          "bilan_contenu": "Résumé des notions construites lors de la séance...",
+                          "supports": "- Matériel d'expérimentation / Étiquettes / Fiches",
+                          "activite_eleve": "- Observer, calculer ou manipuler\\n- Dégager la conclusion",
+                          "activite_prof": "- Guider l'investigation sans donner directement le résultat",
+                          "questions_interactives": "Questions clés de questionnement didactique."
+                        }},
+                        {{
+                          "type_etape": "BILAN",
+                          "duree": "20 min",
+                          "bilan_contenu": "Résumé institutionnel de la séance et exercice d'application résolu.",
+                          "supports": "- Tableau\\n- Cahier de cours",
+                          "activite_eleve": "- Noter la synthèse et résoudre l'exercice d'application",
+                          "activite_prof": "- Structurer la réponse finale et corriger l'exercice",
+                          "questions_interactives": "Évaluation formative des acquis."
+                        }}
+                      ],
+                      "connaissances_evaluables": "Connaissances...",
+                      "capacites_evaluables": "Capacités...",
+                      "obstacles_remediation": "Obstacle et remédiation..."
                     }}
-                  ],
-                  "connaissances_evaluables": "Connaissances clés à évaluer lors du contrôle...",
-                  "capacites_evaluables": "Capacités méthodologiques et d'analyse évaluables...",
-                  "obstacles_remediation": "Obstacle didactique prévisible et remédiation pédagogique proposée."
+                  ]
                 }}
 
                 Support de cours à traiter :
-                \"\"\"{contenu_source[:15000]}\"\"\"
+                \"\"\"{contenu_source[:18000]}\"\"\"
                 """
 
                 reponse = client.models.generate_content(
@@ -377,35 +385,57 @@ if st.button("🚀 Générer la Fiche Pédagogique Officielle (.DOCX)", type="pr
                     )
                 )
 
-                fiche_data = json.loads(reponse.text)
-                
-                # Injection des métadonnées saisies par l'enseignant
-                fiche_data["enseignant"] = ens_nom.strip()
-                fiche_data["niveau"] = niveau_select.split(" ")[0]
-                fiche_data["seance"] = seance_num
-                if titre_manuel.strip():
-                    fiche_data["titre_lecon"] = titre_manuel.strip()
+                resultat_json = json.loads(reponse.text)
+                liste_seances = resultat_json.get("seances", [])
+                nom_lecon_global = resultat_json.get("lecon_detectee", titre_manuel or "Leçon Physique-Chimie")
 
-                doc_docx = generer_document_docx_officiel(fiche_data)
+                st.success(f"🎉 Analyse terminée ! Leçon identifiée : **{nom_lecon_global}** ({len(liste_seances)} séance(s) générée(s))")
 
-                st.success("🎉 Fiche pédagogique générée avec succès selon le modèle officiel !")
+                fichiers_generes = []
 
-                nom_lecon_clean = fiche_data.get('titre_lecon', 'Lecon').replace(' ', '_').replace(':', '')
-                nom_fichier = f"{fiche_data['niveau']}_{fiche_data['seance'].replace('/', '-')}_{nom_lecon_clean}.docx"
-                
-                st.download_button(
-                    label="📥 Télécharger la Fiche Officielle Word (.DOCX)",
-                    data=doc_docx,
-                    file_name=nom_fichier,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    type="primary"
-                )
+                for idx, fiche_data in enumerate(liste_seances):
+                    fiche_data["enseignant"] = ens_nom.strip()
+                    fiche_data["niveau"] = niveau_select.split(" ")[0]
+                    fiche_data["seance"] = fiche_data.get("seance_label", f"Séance {idx+1}/{len(liste_seances)}")
+                    if not fiche_data.get("titre_lecon"):
+                        fiche_data["titre_lecon"] = nom_lecon_global
 
-                with st.expander("👁️ Prévisualiser les éléments de la fiche générée"):
-                    st.write(f"**Question de départ :** {fiche_data.get('question_seance')}")
-                    st.write("**Objectifs :**", fiche_data.get("objectifs"))
-                    st.write("**Prérequis :**", fiche_data.get("prerequis"))
-                    st.write("**Concepts :**", fiche_data.get("concepts"))
+                    doc_docx = generer_document_docx_officiel(fiche_data)
+                    seance_clean = fiche_data['seance'].replace('/', '-').replace(' ', '_')
+                    nom_fichier = f"{fiche_data['niveau']}_{seance_clean}_{nom_lecon_global.replace(' ', '_')}.docx"
+                    
+                    fichiers_generes.append((nom_fichier, doc_docx))
+
+                    col_card, col_btn = st.columns([2.5, 1])
+                    with col_card:
+                        st.markdown(f"**📄 {fiche_data['seance']} :** {fiche_data.get('question_seance', 'Fiche technique')}")
+                    with col_btn:
+                        st.download_button(
+                            label=f"📥 Télécharger {fiche_data['seance']} (.DOCX)",
+                            data=doc_docx,
+                            file_name=nom_fichier,
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"btn_dl_{idx}",
+                            use_container_width=True
+                        )
+
+                # Si plusieurs séances, proposer un pack complet en .ZIP
+                if len(fichiers_generes) > 1:
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+                        for nom_f, buf in fichiers_generes:
+                            zip_file.writestr(nom_f, buf.getvalue())
+                    zip_buffer.seek(0)
+                    
+                    st.divider()
+                    st.download_button(
+                        label="📦 Télécharger toutes les fiches de la leçon (Pack ZIP complet)",
+                        data=zip_buffer,
+                        file_name=f"Fiches_{nom_lecon_global.replace(' ', '_')}.zip",
+                        mime="application/zip",
+                        type="primary",
+                        use_container_width=True
+                    )
 
             except Exception as e:
                 st.error(f"Une erreur est survenue pendant la génération : {e}")
