@@ -53,24 +53,23 @@ def verifier_acces():
     else:
         st.error("Mot de passe incorrect. Le mot de passe attendu est votre nom sans espace suivi de '2026@'.")
 
-# --- PAGE D'AUTHENTIFICATION AVEC LOGO OFFICIEL DU MINISTÈRE ---
+# --- PAGE D'AUTHENTIFICATION AVEC LOGO OFFICIEL DU MINISTÈRE GARANTI SANS LIEN BRISÉ ---
 if not st.session_state.authentifie:
-    st.markdown("""
-        <div style="text-align: center; margin-top: 15px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 15px;">
-                <div style="background-color: #FFFFFF; padding: 16px 28px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: inline-block;">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Logo_MEN_Maroc.svg/1200px-Logo_MEN_Maroc.svg.png" 
-                         alt="Ministère de l'Éducation Nationale" 
-                         style="max-width: 250px; height: auto; display: block; margin: 0 auto;" />
+    col_c1, col_c2, col_c3 = st.columns([1, 1.2, 1])
+    with col_c2:
+        # Affichage via Wikimedia Commons avec en-têtes directs et conteneur centré
+        st.markdown("""
+            <div style="text-align: center; margin-top: 10px; margin-bottom: 20px;">
+                <div style="background-color: #FFFFFF; padding: 15px 25px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+                    <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Logo_MEN_Maroc.svg" 
+                         style="width: 260px; max-width: 100%; height: auto; display: block; margin: 0 auto;" 
+                         alt="Royaume du Maroc - Ministère de l'Éducation Nationale" />
                 </div>
+                <h2 style="color: #4A90E2; margin-top: 15px; margin-bottom: 4px; font-weight: 700;">Portail Pédagogique de Physique-Chimie</h2>
+                <p style="color: #A0AAB5; font-size: 14.5px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial (Maroc)</p>
             </div>
-            <h2 style="color: #4A90E2; margin-top: 10px; margin-bottom: 4px; font-weight: 700;">Portail Pédagogique de Physique-Chimie (Collège)</h2>
-            <p style="color: #A0AAB5; font-size: 14.5px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 1.1, 1])
-    with col2:
+        """, unsafe_allow_html=True)
+        
         st.markdown("#### 🔒 Authentification de l'Enseignant")
         st.text_input("Nom de l'enseignant :", key="nom_prof_input")
         st.text_input("Mot de passe :", type="password", key="mdp_input")
