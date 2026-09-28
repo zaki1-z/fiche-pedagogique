@@ -396,18 +396,33 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 \"\"\"{contenu_source[:18000]}\"\"\"
                 """
 
-                # Cascade multi-modèles avec retries pour parer aux indisponibilités 503
-                modeles_a_tenter = [
-                    "gemini-2.5-flash",
+                # Détection dynamique des modèles activés sur votre compte pour éviter les erreurs 404
+                modeles_prioritaires = [
+                    "gemini-3.1-pro-preview",
                     "gemini-3.8-flash",
                     "gemini-3-flash-preview",
-                    "gemini-2.5-pro"
+                    "gemini-2.0-flash",
+                    "gemini-1.5-flash"
                 ]
+                
+                modeles_disponibles = []
+                try:
+                    for m in client.models.list():
+                        clean_name = m.name.replace("models/", "")
+                        if "embed" not in clean_name.lower():
+                            modeles_disponibles.append(clean_name)
+                except Exception:
+                    pass
+
+                # Combiner les listes en plaçant les modèles recommandés en tête
+                modeles_a_tester = [m for m in modeles_prioritaires if m in modeles_disponibles]
+                if not modeles_a_tester:
+                    modeles_a_tester = modeles_prioritaires + modeles_disponibles
+
                 reponse = None
                 derniere_err = None
 
-                for m in modeles_a_tenter:
-                    # 2 tentatives avec léger délai en cas de pic 503
+                for m in modeles_a_tester:
                     for tentative in range(2):
                         try:
                             reponse = client.models.generate_content(
@@ -422,12 +437,12 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                                 break
                         except Exception as err:
                             derniere_err = err
-                            time.sleep(1.5)
+                            time.sleep(1.0)
                     if reponse and reponse.text:
                         break
 
                 if reponse is None or not reponse.text:
-                    raise Exception(f"Les serveurs Google subissent actuellement une forte affluence ({derniere_err}). Veuillez réessayer dans quelques instants.")
+                    raise Exception(f"Erreur d'accès aux modèles ({derniere_err}).")
 
                 resultat_json = json.loads(reponse.text)
                 liste_seances = resultat_json.get("seances", [])
