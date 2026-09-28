@@ -53,27 +53,23 @@ def verifier_acces():
     else:
         st.error("Mot de passe incorrect. Le mot de passe attendu est votre nom sans espace suivi de '2026@'.")
 
+# --- PAGE D'AUTHENTIFICATION AVEC LOGO OFFICIEL DU MINISTÈRE ---
 if not st.session_state.authentifie:
     st.markdown("""
-        <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 12px;">
-                <svg width="75" height="75" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="46" fill="none" stroke="#1F4E79" stroke-width="3" stroke-dasharray="3,2"/>
-                    <circle cx="50" cy="50" r="41" fill="none" stroke="#1F4E79" stroke-width="1.5"/>
-                    <text x="50" y="27" font-size="8.5" font-family="Arial, sans-serif" font-weight="bold" fill="#1F4E79" text-anchor="middle">المملكة المغربية</text>
-                    <text x="50" y="38" font-size="7.5" font-family="Arial, sans-serif" fill="#1F4E79" text-anchor="middle">وزارة التربية الوطنية</text>
-                    <text x="50" y="47" font-size="6.5" font-family="Arial, sans-serif" fill="#1F4E79" text-anchor="middle">والتعليم الأولي والرياضة</text>
-                    <path d="M 50 54 L 54 62 L 63 62 L 56 67 L 59 75 L 50 70 L 41 75 L 44 67 L 37 62 L 46 62 Z" fill="none" stroke="#1F4E79" stroke-width="1.8"/>
-                    <text x="50" y="87" font-size="6.5" font-family="Arial, sans-serif" font-weight="bold" fill="#1F4E79" text-anchor="middle">Royaume du Maroc</text>
-                </svg>
+        <div style="text-align: center; margin-top: 15px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 15px;">
+                <div style="background-color: #FFFFFF; padding: 16px 28px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: inline-block;">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Logo_MEN_Maroc.svg/1200px-Logo_MEN_Maroc.svg.png" 
+                         alt="Ministère de l'Éducation Nationale" 
+                         style="max-width: 250px; height: auto; display: block; margin: 0 auto;" />
+                </div>
             </div>
-            <h2 style="color: #17365D; margin-bottom: 4px;">المملكة المغربية - وزارة التربية الوطنية</h2>
-            <h3 style="color: #1F4E79; font-weight: normal; margin-top: 0;">Portail Pédagogique de Physique-Chimie (Collège)</h3>
-            <p style="color: #666; font-size: 15px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial</p>
+            <h2 style="color: #4A90E2; margin-top: 10px; margin-bottom: 4px; font-weight: 700;">Portail Pédagogique de Physique-Chimie (Collège)</h2>
+            <p style="color: #A0AAB5; font-size: 14.5px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial</p>
         </div>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 1.2, 1])
+    col1, col2, col3 = st.columns([1, 1.1, 1])
     with col2:
         st.markdown("#### 🔒 Authentification de l'Enseignant")
         st.text_input("Nom de l'enseignant :", key="nom_prof_input")
@@ -287,7 +283,7 @@ def generer_document_docx_officiel(data):
     doc.save(buf)
     return buf.getvalue()
 
-# --- INTERFACE ENSEIGNANT ---
+# --- INTERFACE ENSEIGNANT CONNECTÉ ---
 st.markdown("<h2 style='color:#17365D;'>⚗️ Générateur de Fiches Pédagogiques de Physique-Chimie</h2>", unsafe_allow_html=True)
 st.caption(f"Enseignant(e) connecté(e) : **{st.session_state.prof_nom_connecte}** — Découpage automatique des séances selon le Programme Annuel (Maroc)")
 
@@ -416,7 +412,6 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 \"\"\"{contenu_source[:4000]}\"\"\"
                 """
 
-                # Récupération dynamique des modèles réels activés sur votre compte
                 modeles_valides = []
                 try:
                     for m in client.models.list():
@@ -428,7 +423,6 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 except Exception:
                     pass
 
-                # Tri pour privilégier les modèles Flash, puis Pro
                 modeles_tries = []
                 for mod in modeles_valides:
                     if "flash" in mod.lower():
