@@ -2,6 +2,7 @@ import io
 import json
 import time
 import zipfile
+import xml.etree.ElementTree as ET
 import streamlit as st
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
@@ -81,31 +82,61 @@ if not st.session_state.authentifie:
         st.button("Accéder au Générateur ➔", type="primary", use_container_width=True, on_click=verifier_acces)
     st.stop()
 
-# --- EXTRACTION LÉGÈRE ET PROPRE POUR ÉVITER LE SATURATION ---
+# --- EXTRACTION PPTX ULTRA-ROBUSTE (AVEC SECOURS XML) ---
+def extraire_texte_pptx(uploaded_file):
+    textes = []
+    # 1. Tentative avec python-pptx
+    try:
+        uploaded_file.seek(0)
+        prs = Presentation(uploaded_file)
+        for i, slide in enumerate(prs.slides[:30]):
+            slide_txt = []
+            for shape in slide.shapes:
+                try:
+                    if shape.has_text_frame:
+                        for p in shape.text_frame.paragraphs:
+                            t = p.text.strip()
+                            if t and t not in slide_txt:
+                                slide_txt.append(t)
+                except Exception:
+                    continue
+            if slide_txt:
+                textes.append(f"[Diapo {i+1}] " + " | ".join(slide_txt))
+    except Exception:
+        # 2. Méthode de secours native : lecture directe des fichiers XML internes du PPTX
+        uploaded_file.seek(0)
+        with zipfile.ZipFile(uploaded_file) as zf:
+            slide_files = sorted([f for f in zf.namelist() if f.startswith("ppt/slides/slide") and f.endswith(".xml")])
+            for i, sf in enumerate(slide_files[:30]):
+                xml_content = zf.read(sf)
+                tree = ET.fromstring(xml_content)
+                slide_txt = []
+                for node in tree.iter():
+                    if node.tag.endswith('}t') and node.text:
+                        val = node.text.strip()
+                        if val and val not in slide_txt:
+                            slide_txt.append(val)
+                if slide_txt:
+                    textes.append(f"[Diapo {i+1}] " + " | ".join(slide_txt))
+    
+    return "\n".join(textes)
+
+# --- EXTRACTION MULTI-FORMATS ---
 def extraire_texte(uploaded_file):
     nom = uploaded_file.name.lower()
     texte = ""
-    if nom.endswith(".pdf"):
+    if nom.endswith(".pptx"):
+        texte = extraire_texte_pptx(uploaded_file)
+    elif nom.endswith(".pdf"):
+        uploaded_file.seek(0)
         reader = pypdf.PdfReader(uploaded_file)
         texte = "\n".join([page.extract_text() or "" for page in reader.pages[:20]])
     elif nom.endswith(".docx"):
+        uploaded_file.seek(0)
         doc = Document(uploaded_file)
         texte = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
-    elif nom.endswith(".pptx"):
-        prs = Presentation(uploaded_file)
-        diapos = []
-        for i, slide in enumerate(prs.slides[:25]):  # Limite aux 25 premières diapositives pour la structure
-            textes_slide = []
-            for shape in slide.shapes:
-                if shape.has_text_frame:
-                    for paragraph in shape.text_frame.paragraphs:
-                        t = paragraph.text.strip()
-                        if t and len(t) > 2 and t not in textes_slide:
-                            textes_slide.append(t)
-            if textes_slide:
-                diapos.append(f"[Diapo {i+1}] " + " | ".join(textes_slide))
-        texte = "\n".join(diapos)
     elif nom.endswith(".txt"):
+        uploaded_file.seek(0)
         texte = uploaded_file.read().decode("utf-8", errors="ignore")
     return texte
 
@@ -297,7 +328,10 @@ contenu_source = ""
 if fichier_cours is not None:
     try:
         contenu_source = extraire_texte(fichier_cours)
-        st.success(f"✅ Document '{fichier_cours.name}' analysé avec succès !")
+        if contenu_source.strip():
+            st.success(f"✅ Document '{fichier_cours.name}' analysé avec succès !")
+        else:
+            st.warning(f"⚠️ Document chargé, mais aucun texte lisible extrait. Vous pouvez coller le texte à droite.")
     except Exception as e:
         st.error(f"Erreur de lecture du document : {e}")
 elif texte_libre.strip():
@@ -384,7 +418,6 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 \"\"\"{contenu_source[:5000]}\"\"\"
                 """
 
-                # Modèles stables avec temporisation de sécurité (anti-503)
                 modeles_candidats = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-3.8-flash"]
                 reponse = None
                 derniere_err = None
@@ -404,7 +437,7 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                                 break
                         except Exception as e:
                             derniere_err = e
-                            time.sleep(2.5 * (essai + 1))  # Pause anti-saturation
+                            time.sleep(2.0 * (essai + 1))
                     if reponse and reponse.text:
                         break
 
