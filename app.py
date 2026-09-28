@@ -120,7 +120,7 @@ def ecrire_cellule(cell, text, gras=False, couleur=(0, 0, 0), taille=9, align=WD
 def generer_document_docx_officiel(data):
     doc = Document()
     
-    # Marges fines (1.2 cm) pour tenir sur format standard
+    # Marges fines (1.2 cm)
     for section in doc.sections:
         section.top_margin = Inches(0.47)
         section.bottom_margin = Inches(0.47)
@@ -134,13 +134,16 @@ def generer_document_docx_officiel(data):
     
     col_w_header = [Inches(2.2), Inches(3.1), Inches(2.2)]
     
+    prof_nom = data.get('enseignant', '').strip() or "........................"
+    titre_lecon = data.get('titre_lecon', '').strip() or "Leçon : Physique-Chimie"
+    
     ecrire_cellule(t_header.rows[0].cells[0], f"Séance : {data.get('seance', '1/2')}\nNiveau : {data.get('niveau', '3ème AC')}", gras=True, fond="F2F2F2")
     ecrire_cellule(t_header.rows[0].cells[1], "Fiche Pédagogique", gras=True, taille=13, align=WD_ALIGN_PARAGRAPH.CENTER, fond="E8EEF5", couleur=(23, 54, 93))
-    ecrire_cellule(t_header.rows[0].cells[2], f"Prof : {data.get('enseignant', 'BOUSHIB Nezha')}", gras=True, align=WD_ALIGN_PARAGRAPH.RIGHT, fond="F2F2F2")
+    ecrire_cellule(t_header.rows[0].cells[2], f"Prof : {prof_nom}", gras=True, align=WD_ALIGN_PARAGRAPH.RIGHT, fond="F2F2F2")
     
     # Ligne 2 : Titre de la leçon centré
     cell_lecon = t_header.rows[1].cells[0].merge(t_header.rows[1].cells[1]).merge(t_header.rows[1].cells[2])
-    ecrire_cellule(cell_lecon, f"{data.get('titre_lecon', 'Leçon : Physique-Chimie')}", gras=True, taille=11, align=WD_ALIGN_PARAGRAPH.CENTER, fond="D9E1F2", couleur=(23, 54, 93))
+    ecrire_cellule(cell_lecon, titre_lecon, gras=True, taille=11, align=WD_ALIGN_PARAGRAPH.CENTER, fond="D9E1F2", couleur=(23, 54, 93))
 
     for row in t_header.rows:
         for idx, w in enumerate(col_w_header):
@@ -196,17 +199,11 @@ def generer_document_docx_officiel(data):
 
     for idx, act in enumerate(activites):
         row = t_act.rows[1 + idx]
-        # Colonne 1 : Bilan / Résumé
         ecrire_cellule(row.cells[0], act.get("bilan_contenu", ""), taille=8.5)
-        # Colonne 2 : Supports
         ecrire_cellule(row.cells[1], act.get("supports", ""), taille=8.5)
-        # Colonne 3 : Activité de l'élève
         ecrire_cellule(row.cells[2], act.get("activite_eleve", ""), taille=8.5)
-        # Colonne 4 : Activité du professeur
         ecrire_cellule(row.cells[3], act.get("activite_prof", ""), taille=8.5)
-        # Colonne 5 : Durée
         ecrire_cellule(row.cells[4], act.get("duree", "15 min"), taille=8.5, align=WD_ALIGN_PARAGRAPH.CENTER)
-        # Colonne 6 : Type & Question interactive
         desc_inter = f"{act.get('type_etape', '')}\n\n{act.get('questions_interactives', '')}"
         ecrire_cellule(row.cells[5], desc_inter, gras=True, taille=8, align=WD_ALIGN_PARAGRAPH.CENTER, fond="F2F2F2")
 
@@ -245,14 +242,15 @@ st.caption("Modèle officiel d'inspection (Collèges) — Conforme aux Orientati
 
 with st.sidebar:
     st.header("📋 Paramètres de la séance")
-    ens_nom = st.text_input("Professeur :", value="Mme BOUSHIB Nezha")
+    # Champs libres à saisir par l'utilisateur
+    ens_nom = st.text_input("Professeur :", value="", placeholder="Ex: M. / Mme ...")
     niveau_select = st.selectbox(
         "Niveau scolaire :",
         ["1ère AC (1ère Année Collège)", "2ème AC (2ème Année Collège)", "3ème AC (3ème Année Collège)"],
-        index=2
+        index=0
     )
     seance_num = st.selectbox("Séance :", ["Séance 1/2", "Séance 2/2", "Séance 1/3", "Séance 2/3", "Séance 3/3", "Séance Unique (1/1)"], index=0)
-    titre_manuel = st.text_input("Intitulé / Leçon :", value="Leçon : Atomes et Ions")
+    titre_manuel = st.text_input("Intitulé / Leçon :", value="", placeholder="Ex: Leçon 2 : Atomes et Ions")
     
     st.divider()
     if st.button("🚪 Se déconnecter", use_container_width=True):
@@ -294,13 +292,15 @@ if st.button("🚀 Générer la Fiche Pédagogique Officielle (.DOCX)", type="pr
             try:
                 client = genai.Client(api_key=api_key)
                 
+                intitule_a_utiliser = titre_manuel.strip() if titre_manuel.strip() else "Leçon selon support"
+                
                 prompt = f"""
                 Tu es un inspecteur pédagogique de l'enseignement secondaire collégial marocain en Physique-Chimie.
                 Tu dois générer une fiche pédagogique Word rigoureuse, exactement identique aux fiches modèles d'inspection du Maroc.
 
                 NIVEAU CHOISI : {niveau_select}
                 SÉANCE : {seance_num}
-                INTITULÉ DE LA LEÇON : {titre_manuel}
+                INTITULÉ DE LA LEÇON : {intitule_a_utiliser}
 
                 RÈGLES DIDACTIQUES ET PÉDAGOGIQUES DU PROGRAMME :
                 1. Respecte scrupuleusement les Orientations Pédagogiques officielles du Ministère :
@@ -314,7 +314,7 @@ if st.button("🚀 Générer la Fiche Pédagogique Officielle (.DOCX)", type="pr
 
                 Réponds STRICTEMENT par un objet JSON valide suivant exactement cette structure :
                 {{
-                  "titre_lecon": "{titre_manuel}",
+                  "titre_lecon": "{intitule_a_utiliser}",
                   "question_seance": "Formulation claire de la question-problème de départ",
                   "objectifs": [
                     "Connaître...",
@@ -379,18 +379,19 @@ if st.button("🚀 Générer la Fiche Pédagogique Officielle (.DOCX)", type="pr
 
                 fiche_data = json.loads(reponse.text)
                 
-                # Injection des métadonnées du professeur
-                fiche_data["enseignant"] = ens_nom
+                # Injection des métadonnées saisies par l'enseignant
+                fiche_data["enseignant"] = ens_nom.strip()
                 fiche_data["niveau"] = niveau_select.split(" ")[0]
                 fiche_data["seance"] = seance_num
-                if not fiche_data.get("titre_lecon"):
-                    fiche_data["titre_lecon"] = titre_manuel
+                if titre_manuel.strip():
+                    fiche_data["titre_lecon"] = titre_manuel.strip()
 
                 doc_docx = generer_document_docx_officiel(fiche_data)
 
                 st.success("🎉 Fiche pédagogique générée avec succès selon le modèle officiel !")
 
-                nom_fichier = f"{fiche_data['niveau']}_{fiche_data['seance'].replace('/', '-')}_{fiche_data['titre_lecon'].replace(' ', '_')}.docx"
+                nom_lecon_clean = fiche_data.get('titre_lecon', 'Lecon').replace(' ', '_').replace(':', '')
+                nom_fichier = f"{fiche_data['niveau']}_{fiche_data['seance'].replace('/', '-')}_{nom_lecon_clean}.docx"
                 
                 st.download_button(
                     label="📥 Télécharger la Fiche Officielle Word (.DOCX)",
