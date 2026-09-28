@@ -82,14 +82,13 @@ if not st.session_state.authentifie:
         st.button("Accéder au Générateur ➔", type="primary", use_container_width=True, on_click=verifier_acces)
     st.stop()
 
-# --- EXTRACTION PPTX ULTRA-ROBUSTE (AVEC SECOURS XML) ---
+# --- EXTRACTION PPTX ULTRA-ROBUSTE ---
 def extraire_texte_pptx(uploaded_file):
     textes = []
-    # 1. Tentative avec python-pptx
     try:
         uploaded_file.seek(0)
         prs = Presentation(uploaded_file)
-        for i, slide in enumerate(prs.slides[:30]):
+        for i, slide in enumerate(prs.slides[:25]):
             slide_txt = []
             for shape in slide.shapes:
                 try:
@@ -103,11 +102,10 @@ def extraire_texte_pptx(uploaded_file):
             if slide_txt:
                 textes.append(f"[Diapo {i+1}] " + " | ".join(slide_txt))
     except Exception:
-        # 2. Méthode de secours native : lecture directe des fichiers XML internes du PPTX
         uploaded_file.seek(0)
         with zipfile.ZipFile(uploaded_file) as zf:
             slide_files = sorted([f for f in zf.namelist() if f.startswith("ppt/slides/slide") and f.endswith(".xml")])
-            for i, sf in enumerate(slide_files[:30]):
+            for i, sf in enumerate(slide_files[:25]):
                 xml_content = zf.read(sf)
                 tree = ET.fromstring(xml_content)
                 slide_txt = []
@@ -130,7 +128,7 @@ def extraire_texte(uploaded_file):
     elif nom.endswith(".pdf"):
         uploaded_file.seek(0)
         reader = pypdf.PdfReader(uploaded_file)
-        texte = "\n".join([page.extract_text() or "" for page in reader.pages[:20]])
+        texte = "\n".join([page.extract_text() or "" for page in reader.pages[:15]])
     elif nom.endswith(".docx"):
         uploaded_file.seek(0)
         doc = Document(uploaded_file)
@@ -331,7 +329,7 @@ if fichier_cours is not None:
         if contenu_source.strip():
             st.success(f"✅ Document '{fichier_cours.name}' analysé avec succès !")
         else:
-            st.warning(f"⚠️ Document chargé, mais aucun texte lisible extrait. Vous pouvez coller le texte à droite.")
+            st.warning("⚠️ Document chargé, mais aucun texte lisible extrait. Vous pouvez coller le texte à droite.")
     except Exception as e:
         st.error(f"Erreur de lecture du document : {e}")
 elif texte_libre.strip():
@@ -415,34 +413,32 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 }}
 
                 Support de cours à analyser :
-                \"\"\"{contenu_source[:5000]}\"\"\"
+                \"\"\"{contenu_source[:4500]}\"\"\"
                 """
 
-                modeles_candidats = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-3.8-flash"]
+                # Priorité aux modèles avec quotas larges pour éviter l'erreur 429
+                modeles_candidats = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
                 reponse = None
                 derniere_err = None
 
                 for mod in modeles_candidats:
-                    for essai in range(3):
-                        try:
-                            reponse = client.models.generate_content(
-                                model=mod,
-                                contents=prompt,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    temperature=0.2
-                                )
+                    try:
+                        reponse = client.models.generate_content(
+                            model=mod,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                temperature=0.2
                             )
-                            if reponse and reponse.text:
-                                break
-                        except Exception as e:
-                            derniere_err = e
-                            time.sleep(2.0 * (essai + 1))
-                    if reponse and reponse.text:
-                        break
+                        )
+                        if reponse and reponse.text:
+                            break
+                    except Exception as e:
+                        derniere_err = e
+                        continue
 
                 if reponse is None or not reponse.text:
-                    raise Exception(f"Serveur indisponible pour le moment ({derniere_err}).")
+                    raise Exception(f"Quota temporaire atteint sur ce compte. Veuillez patienter 1 minute puis cliquer à nouveau ({derniere_err}).")
 
                 resultat_json = json.loads(reponse.text)
                 liste_seances = resultat_json.get("seances", [])
