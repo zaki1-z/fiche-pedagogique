@@ -53,69 +53,22 @@ def verifier_acces():
     else:
         st.error("Mot de passe incorrect. Le mot de passe attendu est votre nom sans espace suivi de '2026@'.")
 
-# --- LOGO OFFICIEL VECTORIEL INTÉGRÉ DIRECTEMENT ---
-LOGO_MINISTERE_SVG = """
-<div style="background-color: #FFFFFF; padding: 18px 30px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid #E2E8F0;">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" width="280" height="170">
-        <!-- Titre Haut -->
-        <text x="180" y="24" font-family="'Traditional Arabic', 'Arial', sans-serif" font-size="20" font-weight="bold" fill="#17365D" text-anchor="middle">المملكة المغربية</text>
-        <text x="180" y="42" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="bold" fill="#17365D" text-anchor="middle" letter-spacing="3">ⵜⴰⴳⵍⴷⵉⵜ ⵏ ⵍⵎⴰⵖⵔⵉⴱ</text>
-        
-        <!-- Armoiries Royales -->
-        <g transform="translate(180, 85) scale(0.95)">
-            <!-- Couronne Royale -->
-            <path d="M -18 -26 L -10 -22 L 0 -30 L 10 -22 L 18 -26 L 14 -14 L -14 -14 Z" fill="#D4AF37" stroke="#A67C00" stroke-width="1.2"/>
-            <circle cx="0" cy="-33" r="2.5" fill="#D4AF37"/>
-            <circle cx="-10" cy="-24" r="1.5" fill="#C53030"/>
-            <circle cx="10" cy="-24" r="1.5" fill="#2E7D32"/>
-            
-            <!-- Écusson et Soleil levant -->
-            <path d="M -22 -12 Q 0 -10 22 -12 Q 22 14 0 28 Q -22 14 -22 -12 Z" fill="#E53E3E" stroke="#A67C00" stroke-width="1.5"/>
-            <!-- Champ supérieur avec soleil sur fond bleu -->
-            <path d="M -20 -10 Q 0 -8 20 -10 L 20 2 Q 0 8 -20 2 Z" fill="#1E40AF"/>
-            <circle cx="0" cy="2" r="10" fill="#F59E0B"/>
-            <path d="M 0 2 L -8 -7 M 0 2 L 0 -8 M 0 2 L 8 -7 M 0 2 L -14 -4 M 0 2 L 14 -4" stroke="#FBBF24" stroke-width="1.5"/>
-            
-            <!-- Montagne et Étoile Verte -->
-            <path d="M -20 2 Q 0 8 20 2 Q 18 13 0 26 Q -18 13 -20 2 Z" fill="#DC2626"/>
-            <polygon points="0,5 3.5,16 -6,9 6,9 -3.5,16" fill="#16A34A" stroke="#15803D" stroke-width="0.8"/>
-            
-            <!-- Les deux Lions héraldiques -->
-            <!-- Lion Gauche -->
-            <path d="M -24 4 C -36 -2 -42 -14 -34 -24 C -28 -20 -28 -10 -24 -2 Z" fill="#D4AF37" stroke="#B45309" stroke-width="1"/>
-            <path d="M -34 -14 C -45 -10 -40 10 -30 20 C -26 15 -25 10 -24 4 Z" fill="#D4AF37" stroke="#B45309" stroke-width="1"/>
-            
-            <!-- Lion Droit -->
-            <path d="M 24 4 C 36 -2 42 -14 34 -24 C 28 -20 28 -10 24 -2 Z" fill="#D4AF37" stroke="#B45309" stroke-width="1"/>
-            <path d="M 34 -14 C 45 -10 40 10 30 20 C 26 15 25 10 24 4 Z" fill="#D4AF37" stroke="#B45309" stroke-width="1"/>
-            
-            <!-- Banderole inférieure avec devise -->
-            <path d="M -34 26 Q 0 34 34 26 Q 28 32 0 38 Q -28 32 -34 26 Z" fill="#FEF3C7" stroke="#D4AF37" stroke-width="1"/>
-            <text x="0" y="33" font-size="5" font-family="'Traditional Arabic', Arial" font-weight="bold" fill="#78350F" text-anchor="middle">إن تنصروا الله ينصركم</text>
-        </g>
-        
-        <!-- Intitulé Officiel du Ministère -->
-        <text x="180" y="152" font-family="'Traditional Arabic', 'Arial', sans-serif" font-size="20" font-weight="bold" fill="#17365D" text-anchor="middle">وزارة التربية الوطنية</text>
-        <text x="180" y="174" font-family="'Traditional Arabic', 'Arial', sans-serif" font-size="19" font-weight="bold" fill="#17365D" text-anchor="middle">والتعليم الأولي والرياضة</text>
-        
-        <!-- Tifinagh officiel Ministère -->
-        <text x="180" y="194" font-family="'Segoe UI', Arial, sans-serif" font-size="11" font-weight="bold" fill="#1F4E79" text-anchor="middle" letter-spacing="2">ⵜⴰⵎⴰⵡⴰⵙⵜ ⵏ ⵓⵙⴳⵎⵉ ⴰⵏⴰⵎⵓⵔ</text>
-        <text x="180" y="210" font-family="'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="bold" fill="#1F4E79" text-anchor="middle" letter-spacing="1.5">ⴷ ⵓⵙⵍⵎⴷ ⴰⵎⵣⵡⴰⵔⵓ ⴷ ⵜⵓⵏⵏⵓⵏⵜ</text>
-    </svg>
-</div>
-"""
-
-# --- PAGE D'AUTHENTIFICATION ---
+# --- PAGE D'AUTHENTIFICATION AVEC LOGO OFFICIEL ---
 if not st.session_state.authentifie:
     col_c1, col_c2, col_c3 = st.columns([1, 1.2, 1])
     with col_c2:
-        st.markdown(f"""
-            <div style="text-align: center; margin-top: 10px; margin-bottom: 20px;">
-                {LOGO_MINISTERE_SVG}
-                <h2 style="color: #4A90E2; margin-top: 15px; margin-bottom: 4px; font-weight: 700;">Portail Pédagogique de Physique-Chimie</h2>
-                <p style="color: #A0AAB5; font-size: 14.5px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial (Maroc)</p>
-            </div>
-        """, unsafe_allow_html=True)
+        # Affichage direct et centré de l'image officielle sur fond blanc net
+        st.markdown(
+            '<div style="text-align: center; margin-top: 15px; margin-bottom: 20px;">'
+            '<div style="background-color: #FFFFFF; padding: 16px 24px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid #E2E8F0;">'
+            '<img src="https://raw.githubusercontent.com/abdelkrim/maroc-data/master/logos/men.png" '
+            'style="width: 250px; max-width: 100%; height: auto; display: block; margin: 0 auto;" alt="Ministère de l\'Éducation Nationale" />'
+            '</div>'
+            '<h2 style="color: #4A90E2; margin-top: 15px; margin-bottom: 4px; font-weight: 700;">Portail Pédagogique de Physique-Chimie</h2>'
+            '<p style="color: #A0AAB5; font-size: 14.5px;">Conforme aux Orientations et Programmes Annuels du Secondaire Collégial (Maroc)</p>'
+            '</div>',
+            unsafe_allow_html=True
+        )
         
         st.markdown("#### 🔒 Authentification de l'Enseignant")
         st.text_input("Nom de l'enseignant :", key="nom_prof_input")
