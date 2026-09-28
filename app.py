@@ -1,5 +1,6 @@
 import io
 import json
+import time
 import zipfile
 import streamlit as st
 from docx import Document
@@ -76,7 +77,6 @@ if not st.session_state.authentifie:
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         st.markdown("#### 🔒 Authentification de l'Enseignant")
-        # Champs totalement vides sans aucun texte indicatif
         st.text_input("Nom de l'enseignant :", key="nom_prof_input")
         st.text_input("Mot de passe :", type="password", key="mdp_input")
         st.caption("ℹ️ *Règle : votre mot de passe est votre nom sans espace + 2026@*")
@@ -396,28 +396,38 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 \"\"\"{contenu_source[:18000]}\"\"\"
                 """
 
-                modeles_a_tenter = ["gemini-3.8-flash", "gemini-3-flash-preview"]
+                # Cascade multi-modèles avec retries pour parer aux indisponibilités 503
+                modeles_a_tenter = [
+                    "gemini-2.5-flash",
+                    "gemini-3.8-flash",
+                    "gemini-3-flash-preview",
+                    "gemini-2.5-pro"
+                ]
                 reponse = None
                 derniere_err = None
 
                 for m in modeles_a_tenter:
-                    try:
-                        reponse = client.models.generate_content(
-                            model=m,
-                            contents=prompt,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                temperature=0.2
+                    # 2 tentatives avec léger délai en cas de pic 503
+                    for tentative in range(2):
+                        try:
+                            reponse = client.models.generate_content(
+                                model=m,
+                                contents=prompt,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    temperature=0.2
+                                )
                             )
-                        )
-                        if reponse and reponse.text:
-                            break
-                    except Exception as err:
-                        derniere_err = err
-                        continue
+                            if reponse and reponse.text:
+                                break
+                        except Exception as err:
+                            derniere_err = err
+                            time.sleep(1.5)
+                    if reponse and reponse.text:
+                        break
 
                 if reponse is None or not reponse.text:
-                    raise Exception(f"Erreur d'appel API : {derniere_err}")
+                    raise Exception(f"Les serveurs Google subissent actuellement une forte affluence ({derniere_err}). Veuillez réessayer dans quelques instants.")
 
                 resultat_json = json.loads(reponse.text)
                 liste_seances = resultat_json.get("seances", [])
