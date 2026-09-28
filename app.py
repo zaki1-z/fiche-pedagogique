@@ -376,14 +376,29 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 \"\"\"{contenu_source[:18000]}\"\"\"
                 """
 
-                reponse = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        temperature=0.2
-                    )
-                )
+                # Tentative avec le modèle recommandé par l'API puis modèles alternatifs en cascade
+                modeles_a_tester = ["gemini-3.8-flash", "gemini-3-flash-preview", "gemini-2.5-flash-preview"]
+                reponse = None
+                derniere_erreur = None
+
+                for nom_modele in modeles_a_tester:
+                    try:
+                        reponse = client.models.generate_content(
+                            model=nom_modele,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                temperature=0.2
+                            )
+                        )
+                        if reponse and reponse.text:
+                            break
+                    except Exception as err:
+                        derniere_erreur = err
+                        continue
+
+                if reponse is None or not reponse.text:
+                    raise Exception(f"Impossible de contacter l'API Gemini : {derniere_erreur}")
 
                 resultat_json = json.loads(reponse.text)
                 liste_seances = resultat_json.get("seances", [])
