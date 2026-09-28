@@ -44,7 +44,6 @@ def verifier_acces():
         st.error("Veuillez saisir votre nom d'enseignant.")
         return
 
-    # Mot de passe dynamique : nom sans espace en minuscules + 2026@
     nom_sans_espace = "".join(nom_saisi.split()).lower()
     mdp_attendu = f"{nom_sans_espace}2026@"
 
@@ -393,56 +392,39 @@ if st.button("🚀 Générer la / les Fiche(s) Pédagogique(s) Officielle(s)", t
                 }}
 
                 Support de cours à traiter :
-                \"\"\"{contenu_source[:18000]}\"\"\"
+                \"\"\"{contenu_source[:9000]}\"\"\"
                 """
 
-                # Détection dynamique des modèles activés sur votre compte pour éviter les erreurs 404
-                modeles_prioritaires = [
-                    "gemini-3.1-pro-preview",
-                    "gemini-3.8-flash",
-                    "gemini-3-flash-preview",
+                # Liste des modèles disponibles en priorité standard pour éviter le 503
+                modeles_a_tenter = [
                     "gemini-2.0-flash",
-                    "gemini-1.5-flash"
+                    "gemini-2.5-flash",
+                    "gemini-1.5-flash",
+                    "gemini-3-flash-preview"
                 ]
-                
-                modeles_disponibles = []
-                try:
-                    for m in client.models.list():
-                        clean_name = m.name.replace("models/", "")
-                        if "embed" not in clean_name.lower():
-                            modeles_disponibles.append(clean_name)
-                except Exception:
-                    pass
-
-                # Combiner les listes en plaçant les modèles recommandés en tête
-                modeles_a_tester = [m for m in modeles_prioritaires if m in modeles_disponibles]
-                if not modeles_a_tester:
-                    modeles_a_tester = modeles_prioritaires + modeles_disponibles
 
                 reponse = None
                 derniere_err = None
 
-                for m in modeles_a_tester:
-                    for tentative in range(2):
-                        try:
-                            reponse = client.models.generate_content(
-                                model=m,
-                                contents=prompt,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    temperature=0.2
-                                )
+                for m in modeles_a_tenter:
+                    try:
+                        reponse = client.models.generate_content(
+                            model=m,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                temperature=0.2
                             )
-                            if reponse and reponse.text:
-                                break
-                        except Exception as err:
-                            derniere_err = err
-                            time.sleep(1.0)
-                    if reponse and reponse.text:
-                        break
+                        )
+                        if reponse and reponse.text:
+                            break
+                    except Exception as err:
+                        derniere_err = err
+                        time.sleep(1.0)
+                        continue
 
                 if reponse is None or not reponse.text:
-                    raise Exception(f"Erreur d'accès aux modèles ({derniere_err}).")
+                    raise Exception(f"Indisponibilité temporaire des serveurs Gemini ({derniere_err}). Veuillez relancer.")
 
                 resultat_json = json.loads(reponse.text)
                 liste_seances = resultat_json.get("seances", [])
